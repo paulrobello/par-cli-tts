@@ -1,6 +1,7 @@
 """Base class for TTS providers."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,12 +20,12 @@ class Voice:
 class TTSProvider(ABC):
     """Abstract base class for TTS providers."""
 
-    def __init__(self, api_key: str, **kwargs: Any):
+    def __init__(self, api_key: str | None = None, **kwargs: Any):
         """
         Initialize the TTS provider.
 
         Args:
-            api_key: API key for the provider.
+            api_key: Optional API key for the provider. Some providers (like offline ones) don't need it.
             **kwargs: Additional provider-specific configuration.
         """
         self.api_key = api_key
@@ -37,7 +38,7 @@ class TTSProvider(ABC):
         voice: str,
         model: str | None = None,
         **kwargs: Any,
-    ) -> bytes:
+    ) -> bytes | Iterator[bytes]:
         """
         Generate speech from text.
 
@@ -48,7 +49,7 @@ class TTSProvider(ABC):
             **kwargs: Additional provider-specific parameters.
 
         Returns:
-            Audio data as bytes.
+            Audio data as bytes or an iterator of bytes for streaming.
         """
         pass
 
@@ -79,23 +80,36 @@ class TTSProvider(ABC):
         pass
 
     @abstractmethod
-    def save_audio(self, audio_data: bytes, file_path: str | Path) -> None:
+    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
         """
         Save audio data to a file.
 
         Args:
-            audio_data: Audio data to save.
+            audio_data: Audio data to save (bytes or iterator for streaming).
             file_path: Path to save the audio file.
         """
         pass
 
+    def stream_to_file(self, audio_stream: Iterator[bytes], file_path: str | Path) -> None:
+        """
+        Stream audio data directly to file without buffering in memory.
+
+        Args:
+            audio_stream: Iterator yielding audio data chunks.
+            file_path: Path to save the audio file.
+        """
+        from src.utils import stream_to_file
+
+        stream_to_file(audio_stream, file_path)
+
     @abstractmethod
-    def play_audio(self, audio_data: bytes) -> None:
+    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
         """
         Play audio data.
 
         Args:
-            audio_data: Audio data to play.
+            audio_data: Audio data to play (bytes or iterator).
+            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
         """
         pass
 

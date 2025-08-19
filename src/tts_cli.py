@@ -20,14 +20,16 @@ from rich.console import Console
 from rich.pretty import Pretty
 from rich.table import Table
 
+from src.config_file import ConfigManager
+from src.errors import ErrorType, handle_error, validate_api_key, validate_file_path
 from src.providers import PROVIDERS, TTSProvider
 
 console = Console()
 app = typer.Typer(help="Text-to-speech command line tool with multiple provider support")
 
 # Default configurations
-DEFAULT_PROVIDER = "elevenlabs"
-DEFAULT_ELEVENLABS_VOICE = "aMSt68OGf4xUZAnLpTU8"
+DEFAULT_PROVIDER = "kokoro-onnx"
+DEFAULT_ELEVENLABS_VOICE = "Juniper"
 DEFAULT_OPENAI_VOICE = "nova"
 DEFAULT_KOKORO_VOICE = "af_sarah"
 
@@ -56,14 +58,14 @@ def get_api_key(provider: str) -> str | None:
 
     env_var = env_var_map.get(provider)
     if not env_var:
-        console.print(f"[red]Error: Unknown provider '{provider}'[/red]")
-        sys.exit(1)
+        handle_error(f"Unknown provider '{provider}'", ErrorType.INVALID_PROVIDER)
+        return None  # For type checker, never reached
 
     api_key = os.getenv(env_var)
-    if not api_key:
-        console.print(f"[red]Error: {env_var} not found in environment[/red]")
-        console.print(f"Please set {env_var} in your .env file or environment")
-        sys.exit(1)
+    if not api_key and provider != "kokoro-onnx":
+        handle_error(
+            f"{env_var} not found. Please set {env_var} in your .env file or environment", ErrorType.MISSING_API_KEY
+        )
 
     return api_key
 
@@ -101,11 +103,12 @@ def create_provider(provider_name: str, **kwargs: Any) -> TTSProvider:
         SystemExit: If provider is not found or cannot be initialized.
     """
     if provider_name not in PROVIDERS:
-        console.print(f"[red]Error: Unknown provider '{provider_name}'[/red]")
-        console.print(f"Available providers: {', '.join(PROVIDERS.keys())}")
-        sys.exit(1)
+        handle_error(
+            f"Unknown provider '{provider_name}'. Available: {', '.join(PROVIDERS.keys())}", ErrorType.INVALID_PROVIDER
+        )
 
     api_key = get_api_key(provider_name)
+    validate_api_key(api_key, provider_name)
     provider_class = PROVIDERS[provider_name]
 
     try:
@@ -115,13 +118,15 @@ def create_provider(provider_name: str, **kwargs: Any) -> TTSProvider:
         else:
             return provider_class(api_key, **kwargs)
     except Exception as e:
-        console.print(f"[red]Error initializing {provider_name} provider: {e}[/red]")
-        sys.exit(1)
+        handle_error(f"Failed to initialize {provider_name} provider", ErrorType.PROVIDER_ERROR, exception=e)
+        raise  # Re-raise for type checker
 
 
 @app.command()
 def main(
-    text: Annotated[str, typer.Argument(help="Text to convert to speech")],
+    text: Annotated[
+        str | None, typer.Argument(help="Text to convert to speech. Use '-' for stdin, '@filename' to read from file")
+    ] = None,
     provider: Annotated[
         str,
         typer.Option(
@@ -204,8 +209,9 @@ def main(
     speed: Annotated[
         float,
         typer.Option(
+            "-r",
             "--speed",
-            help="Speech speed for OpenAI (0.25 to 4.0)",
+            help="Speech speed for OpenAI/Kokoro (0.25 to 4.0)",
             min=0.25,
             max=4.0,
         ),
@@ -221,10 +227,21 @@ def main(
     lang: Annotated[
         str,
         typer.Option(
+            "-g",
             "--lang",
             help="Language code for Kokoro ONNX (e.g., en-us)",
         ),
     ] = "en-us",
+    volume: Annotated[
+        float,
+        typer.Option(
+            "-w",
+            "--volume",
+            help="Playback volume (0.0 = silent, 1.0 = normal, 2.0 = double)",
+            min=0.0,
+            max=5.0,
+        ),
+    ] = 1.0,
     # Utility options
     debug: Annotated[
         bool,
@@ -242,6 +259,14 @@ def main(
             help="List available voices and exit",
         ),
     ] = False,
+    preview_voice: Annotated[
+        str | None,
+        typer.Option(
+            "-V",
+            "--preview-voice",
+            help="Preview a voice with sample text and exit",
+        ),
+    ] = None,
     list_providers: Annotated[
         bool,
         typer.Option(
@@ -258,6 +283,27 @@ def main(
             help="Dump configuration and exit",
         ),
     ] = False,
+    refresh_cache: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-cache",
+            help="Force refresh voice cache (ElevenLabs only)",
+        ),
+    ] = False,
+    clear_cache_samples: Annotated[
+        bool,
+        typer.Option(
+            "--clear-cache-samples",
+            help="Clear cached voice samples",
+        ),
+    ] = False,
+    create_config: Annotated[
+        bool,
+        typer.Option(
+            "--create-config",
+            help="Create a sample configuration file",
+        ),
+    ] = False,
 ) -> None:
     """
     Convert text to speech using various TTS providers.
@@ -267,6 +313,77 @@ def main(
     or environment variables.
     """
     load_dotenv()
+
+    # Handle create config first
+    if create_config:
+        config_manager = ConfigManager()
+        config_manager.create_sample_config()
+        return
+
+    # Load configuration file
+    config_manager = ConfigManager()
+    config_file = config_manager.load_config()
+
+    # Apply config file defaults (CLI args override these)
+    if config_file:
+        # Update defaults from config file
+        provider = provider or config_file.provider or DEFAULT_PROVIDER
+        voice = voice or config_file.voice
+        model = model or config_file.model
+        output = output or (Path(config_file.output_dir) / "output.mp3" if config_file.output_dir else None)
+        response_format = response_format if response_format != "mp3" else config_file.output_format or "mp3"
+        keep_temp = keep_temp if keep_temp else config_file.keep_temp or False
+        temp_dir = temp_dir or (Path(config_file.temp_dir) if config_file.temp_dir else None)
+        volume = volume if volume != 1.0 else config_file.volume or 1.0
+        speed = speed if speed != 1.0 else config_file.speed or 1.0
+        stability = stability if stability != 0.5 else config_file.stability or 0.5
+        similarity_boost = similarity_boost if similarity_boost != 0.5 else config_file.similarity_boost or 0.5
+        lang = lang or config_file.lang or "en-us"
+        play_audio = (
+            play_audio if play_audio else config_file.play_audio if config_file.play_audio is not None else True
+        )
+        debug = debug or config_file.debug or False
+
+    # Store debug mode globally for error handler
+    sys._debug_mode = debug  # type: ignore
+
+    # Check if text is required (not needed for certain operations)
+    text_required = not (
+        list_providers or list_voices or preview_voice or dump_config or refresh_cache or clear_cache_samples
+    )
+
+    # Automatically read from stdin if no text provided and stdin has data
+    if text_required and text is None:
+        # Check if stdin has data
+        if sys.stdin.isatty():
+            # No piped input, show error
+            handle_error(
+                "TEXT argument is required. Use --help for more information. You can also pipe text: echo 'text' | par-tts",
+                ErrorType.INVALID_INPUT,
+            )
+        else:
+            # Read from stdin automatically
+            text = sys.stdin.read()
+            if not text:
+                handle_error("No input received from stdin", ErrorType.INVALID_INPUT)
+
+    # Handle different text input sources
+    if text and text == "-":
+        # Read from stdin
+        text = sys.stdin.read()
+        if not text:
+            handle_error("No input received from stdin", ErrorType.INVALID_INPUT)
+    elif text and text.startswith("@"):
+        # Read from file
+        file_path = Path(text[1:])
+        validate_file_path(str(file_path), must_exist=True)
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                text = f.read()
+            if not text:
+                handle_error(f"File '{file_path}' is empty", ErrorType.INVALID_INPUT)
+        except Exception as e:
+            handle_error(f"Failed to read file '{file_path}'", ErrorType.FILE_NOT_FOUND, exception=e)
 
     # Handle list providers
     if list_providers:
@@ -289,6 +406,32 @@ def main(
     # Create provider
     tts_provider = create_provider(provider)
 
+    # Handle cache management operations (ElevenLabs only)
+    if refresh_cache or clear_cache_samples:
+        if provider == "elevenlabs":
+            from src.providers.elevenlabs import ElevenLabsProvider
+            from src.voice_cache import VoiceCache
+
+            if isinstance(tts_provider, ElevenLabsProvider):
+                cache = VoiceCache("par-tts-elevenlabs")
+
+                if refresh_cache:
+                    console.print("[cyan]Force refreshing voice cache...[/cyan]")
+                    if cache.refresh_cache(tts_provider.client):
+                        console.print("[green]✓ Voice cache refreshed successfully[/green]")
+                    else:
+                        console.print("[yellow]Voice cache is already up to date[/yellow]")
+
+                if clear_cache_samples:
+                    console.print("[cyan]Clearing cached voice samples...[/cyan]")
+                    cache.clear_cache(keep_samples=False)
+                    console.print("[green]✓ Voice samples cleared[/green]")
+
+                return
+        else:
+            console.print("[yellow]Cache management is only available for ElevenLabs provider[/yellow]")
+            return
+
     # Handle list voices
     if list_voices:
         console.print(f"[bold green]Available Voices for {tts_provider.name}:[/bold green]")
@@ -298,8 +441,56 @@ def main(
                 labels_str = ", ".join(v.labels) if v.labels else "No labels"
                 console.print(f"  [yellow]{v.id}[/yellow]: [white]{v.name}[/white] - {labels_str}")
         except Exception as e:
-            console.print(f"[red]Error fetching voices: {e}[/red]")
-            sys.exit(1)
+            handle_error("Failed to fetch available voices", ErrorType.PROVIDER_ERROR, exception=e)
+        return
+
+    # Handle voice preview
+    if preview_voice:
+        console.print(f"[bold cyan]Previewing voice: {preview_voice}[/bold cyan]")
+        sample_text = "Hello! This is a preview of the voice you selected. The quick brown fox jumps over the lazy dog."
+
+        try:
+            # Resolve voice
+            resolved_voice = tts_provider.resolve_voice(preview_voice)
+            console.print(f"[dim]Voice resolved to: {resolved_voice}[/dim]")
+
+            # Check for cached sample first (ElevenLabs only)
+            audio_data = None
+            if provider == "elevenlabs":
+                from src.voice_cache import VoiceCache
+
+                cache = VoiceCache("par-tts-elevenlabs")
+                cached_sample = cache.get_voice_sample(resolved_voice)
+                if cached_sample:
+                    cached_text, audio_data = cached_sample
+                    if cached_text == sample_text:
+                        console.print("[dim]Using cached voice sample[/dim]")
+                    else:
+                        audio_data = None  # Different sample text, regenerate
+
+            # Generate preview speech if not cached
+            if audio_data is None:
+                console.print("[cyan]Generating preview...[/cyan]")
+                audio_data = tts_provider.generate_speech(
+                    text=sample_text,
+                    voice=resolved_voice,
+                    model=model,
+                )
+
+                # Cache the sample for future use (ElevenLabs only)
+                if provider == "elevenlabs" and isinstance(audio_data, bytes):
+                    from src.voice_cache import VoiceCache
+
+                    cache = VoiceCache("par-tts-elevenlabs")
+                    cache.cache_voice_sample(resolved_voice, sample_text, audio_data)
+
+            # Play the preview
+            console.print("[cyan]Playing preview...[/cyan]")
+            tts_provider.play_audio(audio_data, volume=volume)
+
+            console.print("[green]✓ Preview complete![/green]")
+        except Exception as e:
+            handle_error("Failed to preview voice", ErrorType.PROVIDER_ERROR, exception=e)
         return
 
     # Get default voice if not specified
@@ -345,6 +536,14 @@ def main(
 
         console.print("[bold cyan]Configuration:[/bold cyan]")
         console.print(Pretty(config))
+
+        # Show config file info
+        if config_file:
+            console.print(f"\n[dim]Config file loaded from: {config_manager.config_file}[/dim]")
+        else:
+            console.print(f"\n[dim]No config file found at: {config_manager.config_file}[/dim]")
+            console.print("[dim]Use --create-config to create a sample configuration file[/dim]")
+
         return
 
     # Resolve voice
@@ -354,19 +553,42 @@ def main(
         if debug and original_voice != voice:
             console.print(f"[dim]Resolved '{original_voice}' to voice ID: {voice}[/dim]")
     except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        sys.exit(1)
+        handle_error(str(e), ErrorType.INVALID_VOICE, exception=e)
 
     # Debug information
     if debug:
+        from src.utils import sanitize_debug_output
+
+        # Create debug info dict
+        debug_info = {
+            "Provider": provider,
+            "Text_length": f"{len(text)} characters" if text else "N/A",
+            "Voice_input": original_voice,
+            "Voice_ID": voice,
+            "Model": model or "default",
+        }
+
+        # Add environment variables (sanitized)
+        env_vars = {}
+        for key in os.environ:
+            if "API" in key or "KEY" in key or "TOKEN" in key or "TTS" in key:
+                env_vars[key] = os.environ[key]
+
+        sanitized_env = sanitize_debug_output(env_vars)
+
         console.print("[bold cyan]Debug Information:[/bold cyan]")
-        console.print(f"  Provider: {provider}")
-        console.print(f"  Text length: {len(text)} characters")
-        console.print(f"  Voice input: {original_voice}")
-        console.print(f"  Voice ID: {voice}")
-        console.print(f"  Model: {model or tts_provider.default_model}")
-        console.print(f"  Output file: {output}")
-        console.print(f"  Play audio: {play_audio}")
+        for key, value in debug_info.items():
+            console.print(f"  {key}: {value}")
+
+        # Show sanitized environment variables if any are relevant
+        if env_vars:
+            console.print("\n[bold cyan]Environment Variables (sanitized):[/bold cyan]")
+            for key, value in sanitized_env.items():
+                console.print(f"  {key}: {value}")
+
+        # Add additional debug info
+        console.print(f"  Output_file: {output or 'None'}")
+        console.print(f"  Play_audio: {play_audio}")
         if temp_dir:
             console.print(f"  Temp directory: {temp_dir}")
         console.print()
@@ -399,6 +621,10 @@ def main(
             )
 
         # Generate speech
+        if not text:
+            handle_error("No text provided for speech generation", ErrorType.INVALID_INPUT)
+            return  # For type checker
+
         audio_data = tts_provider.generate_speech(
             text=text,
             voice=voice,
@@ -427,7 +653,7 @@ def main(
 
             if play_audio:
                 console.print("[cyan]Playing audio...[/cyan]")
-                tts_provider.play_audio(audio_data)
+                tts_provider.play_audio(audio_data, volume=volume)
         else:
             if play_audio:
                 console.print("[cyan]Playing audio...[/cyan]")
@@ -446,7 +672,7 @@ def main(
                 tts_provider.save_audio(audio_data, tmp_path)
 
                 try:
-                    tts_provider.play_audio(audio_data)
+                    tts_provider.play_audio(audio_data, volume=volume)
 
                     if keep_temp or temp_dir:
                         console.print(f"[green]✓ Audio saved to: {tmp_path}[/green]")
@@ -482,12 +708,9 @@ def main(
         console.print("[green]✓ Speech generation complete![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error generating speech: {e}[/red]")
-        if debug:
-            import traceback
-
-            console.print("[red]" + traceback.format_exc() + "[/red]")
-        sys.exit(1)
+        # Store debug mode for error handler
+        sys._debug_mode = debug  # type: ignore
+        handle_error("Failed to generate speech", ErrorType.PROVIDER_ERROR, exception=e)
 
 
 if __name__ == "__main__":

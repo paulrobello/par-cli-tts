@@ -10,7 +10,7 @@ from rich.table import Table
 
 from src.model_downloader import ModelDownloader
 
-console = Console()
+console: Console = Console()
 app = typer.Typer(help="Manage Kokoro ONNX TTS models")
 
 

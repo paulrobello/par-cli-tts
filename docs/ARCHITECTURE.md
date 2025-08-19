@@ -24,13 +24,16 @@ graph TB
     subgraph "User Interface Layer"
         CLI[CLI Interface<br/>tts_cli.py]
         ENV[Environment Variables<br/>.env]
+        CONF[Config File<br/>~/.config/par-tts/config.yaml]
     end
 
     subgraph "Core Application Layer"
         PM[Provider Manager]
         VC[Voice Cache<br/>voice_cache.py]
         MD[Model Downloader<br/>model_downloader.py]
-        CFG[Configuration Handler]
+        CFG[Configuration Manager<br/>config_file.py]
+        ERR[Error Handler<br/>errors.py]
+        UTIL[Utilities<br/>utils.py]
     end
 
     subgraph "Provider Abstraction Layer"
@@ -56,8 +59,11 @@ graph TB
 
     CLI --> PM
     CLI --> CFG
+    CLI --> ERR
     ENV --> CFG
+    CONF --> CFG
     PM --> BASE
+    PM --> UTIL
     BASE --> EL
     BASE --> OA
     BASE --> KO
@@ -79,7 +85,10 @@ graph TB
     style PM fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style MD fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style CFG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CONF fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CFG fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style ERR fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
+    style UTIL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style BASE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style EL fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style OA fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
@@ -110,35 +119,43 @@ graph TB
 #### 1. CLI Interface (`src/tts_cli.py`)
 
 The main entry point that handles:
-- Command-line argument parsing using Typer
+- Command-line argument parsing using Typer with short flags
+- Multiple input methods (direct text, stdin, @filename)
 - Provider selection and initialization
 - Voice resolution and validation
-- Audio generation orchestration
+- Voice preview functionality
+- Audio generation orchestration with streaming
+- Volume control for playback
 - File management and cleanup
+- Sanitized debug output
 
 #### 2. Provider Abstraction (`src/providers/base.py`)
 
 Abstract base class defining the provider interface:
-- Speech generation
+- Speech generation with Iterator[bytes] support
 - Voice listing and resolution
-- Audio file operations
+- Audio file operations with streaming
+- Volume control for playback
 - Provider metadata
+- Optional API key for offline providers
 
 #### 3. Provider Implementations
 
 **ElevenLabs Provider (`src/providers/elevenlabs.py`)**
-- Voice caching support
+- Voice caching support with change detection
 - Advanced voice settings (stability, similarity boost)
-- Streaming audio generation
+- Streaming audio generation (Iterator[bytes])
+- Voice sample caching for offline preview
 
 **OpenAI Provider (`src/providers/openai.py`)**
 - Multiple audio formats
 - Variable speech speed
 - Simple voice selection
+- Streaming support
 
 **Kokoro ONNX Provider (`src/providers/kokoro_onnx.py`)**
 - Offline TTS using ONNX Runtime
-- Automatic model downloading on first use
+- Automatic model downloading with SHA256 verification
 - XDG-compliant model storage
 - Multiple voice styles
 - Language support with phoneme synthesis
@@ -149,9 +166,12 @@ Abstract base class defining the provider interface:
 
 Intelligent caching layer for voice data:
 - XDG-compliant storage
-- 7-day expiry policy
-- Automatic cache invalidation
+- 7-day expiry policy with change detection
+- Automatic cache invalidation via content hashing
 - Fuzzy voice name matching
+- Voice sample caching for offline preview
+- Manual cache refresh (--refresh-cache)
+- Sample cache management (--clear-cache-samples)
 
 #### 5. Model Downloader (`src/model_downloader.py`)
 
@@ -159,8 +179,44 @@ Automatic model management for offline providers:
 - XDG-compliant data storage
 - Progress indicators with transfer speeds
 - Automatic download on first use
+- SHA256 checksum verification
 - Model verification and cleanup
-- ~100 MB total download size for Kokoro ONNX
+- ~106 MB total download size for Kokoro ONNX
+
+#### 6. Utility Functions (`src/utils.py`)
+
+Common utilities for the application:
+- `stream_to_file()`: Memory-efficient streaming
+- `sanitize_debug_output()`: API key masking
+- `verify_file_checksum()`: SHA256 verification
+- `calculate_file_checksum()`: Checksum generation
+
+#### 7. Configuration Classes (`src/config.py`)
+
+Structured configuration management:
+- `AudioSettings`: Format and audio parameters
+- `OutputSettings`: File and playback options
+- `ProviderSettings`: Provider-specific settings
+- `TTSConfig`: Complete configuration object
+
+#### 8. Configuration File Manager (`src/config_file.py`)
+
+YAML-based configuration file support:
+- `ConfigFile`: Pydantic model for config structure
+- `ConfigManager`: Load, validate, and merge configurations
+- XDG-compliant config location (~/.config/par-tts/config.yaml)
+- Sample config generation (--create-config)
+- CLI argument precedence over config file
+
+#### 9. Error Handling Module (`src/errors.py`)
+
+Centralized error management:
+- `ErrorType`: Enum for categorized exit codes
+- `handle_error()`: Consistent error reporting with Rich console
+- `validate_api_key()`: API key validation
+- `validate_file_path()`: File path validation
+- Debug mode support with detailed stack traces
+- Categorized error types (AUTH, NETWORK, VOICE, FILE, etc.)
 
 ### Component Interaction Diagram
 
@@ -226,13 +282,14 @@ The provider abstraction pattern is the core architectural pattern that enables 
 classDiagram
     class TTSProvider {
         <<abstract>>
-        +api_key: str
+        +api_key: str | None
         +config: dict
-        +generate_speech(text, voice, model) bytes
+        +generate_speech(text, voice, model) bytes | Iterator~bytes~
         +list_voices() list~Voice~
         +resolve_voice(identifier) str
         +save_audio(data, path) None
-        +play_audio(data) None
+        +stream_to_file(stream, path) None
+        +play_audio(data, volume) None
         +name: str
         +supported_formats: list~str~
         +default_model: str
@@ -332,7 +389,13 @@ PROVIDERS = {
 
 ```mermaid
 flowchart TD
-    Start([User Input]) --> Parse[Parse CLI Arguments]
+    Start([User Input]) --> Input{Input Type?}
+    Input -->|Direct Text| Parse[Parse CLI Arguments]
+    Input -->|Stdin Pipe| ReadStdin[Read from Stdin]
+    Input -->|@filename| ReadFile[Read from File]
+
+    ReadStdin --> Parse
+    ReadFile --> Parse
     Parse --> LoadEnv[Load Environment Variables]
     LoadEnv --> SelectProvider{Select Provider}
 
@@ -713,9 +776,10 @@ flowchart TD
 ```mermaid
 graph TD
     subgraph "Configuration Sources - Priority Order"
-        CLI[1. CLI Arguments<br/>Highest Priority]
+        CLI[1. CLI Arguments<br/>Highest Priority<br/>All with short flags]
         ENV[2. Environment Variables]
-        DEFAULT[3. Default Values<br/>Lowest Priority]
+        CONF[3. Config File<br/>~/.config/par-tts/config.yaml]
+        DEFAULT[4. Default Values<br/>Lowest Priority]
     end
 
     subgraph "Configuration Types"
@@ -732,11 +796,16 @@ graph TD
     ENV --> AUTH
     ENV --> PROVIDER
 
+    CONF --> PROVIDER
+    CONF --> AUDIO
+    CONF --> OUTPUT
+
     DEFAULT --> PROVIDER
     DEFAULT --> AUDIO
 
     style CLI fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style ENV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CONF fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style DEFAULT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style AUTH fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style PROVIDER fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -1112,6 +1181,12 @@ graph TB
         FC[File Cache<br/>Recent audio files]
     end
 
+    subgraph "Memory Optimization"
+        STREAM[Iterator[bytes] Streaming]
+        DIRECT[Direct File Writing]
+        CHUNK[Chunk Processing]
+    end
+
     subgraph "API Optimization"
         BATCH[Batch Requests]
         STREAM[Streaming Responses]
@@ -1214,12 +1289,14 @@ graph TB
             KEYS[API Keys<br/>Environment Variables]
             VALID[Key Validation]
             ROTATE[Key Rotation Support]
+            SANITIZE[Debug Output Sanitization]
         end
 
         subgraph "Data Protection"
             CACHE_SEC[Cache Security<br/>User-only Access]
             TEMP_SEC[Temp File Security<br/>Secure Deletion]
             AUDIO_SEC[Audio Privacy<br/>No Cloud Storage]
+            CHECKSUM[SHA256 Verification<br/>Model Integrity]
         end
 
         subgraph "Input Validation"
@@ -1287,16 +1364,31 @@ gantt
     CDN Integration         :2024-10-15, 20d
 ```
 
+### Recent Improvements (v0.2.0)
+
+1. **Configuration File Support**: YAML-based config at ~/.config/par-tts/config.yaml
+2. **Consistent Error Handling**: ErrorType enum with categorized exit codes
+3. **Smarter Voice Cache**: Change detection, manual refresh, sample caching
+4. **Input Methods**: Support for stdin piping and file input (@filename)
+5. **Volume Control**: Platform-specific volume adjustment (0.0-5.0)
+6. **Voice Preview**: Test voices with sample text before use
+7. **Memory Efficiency**: Stream audio directly to files without buffering
+8. **Security**: API key sanitization in debug output
+9. **Model Verification**: SHA256 checksums for downloaded models
+10. **CLI Enhancement**: All options now have short flags
+
 ### Planned Architecture Improvements
 
-1. **Asynchronous Operations**: Implement async/await for concurrent TTS generation
-2. **Plugin System**: Dynamic provider loading from external packages
-3. **Voice Profile Management**: User-specific voice preferences and presets
-4. **Advanced Caching**: Multi-tier caching with Redis support
-5. **Monitoring and Metrics**: Performance tracking and usage analytics
-6. **Web API**: RESTful API wrapper for the CLI functionality
-7. **Voice Marketplace**: Integration with voice model marketplaces
-8. **Multi-language Support**: Automatic language detection and switching
+1. **Cost Tracking**: Monitor and report API usage costs
+2. **Better Progress Feedback**: Show progress for long text processing
+3. **Plugin System**: Dynamic provider loading from external packages
+4. **Voice Profile Management**: User-specific voice preferences and presets
+5. **Advanced Caching**: Multi-tier caching with Redis support
+6. **Monitoring and Metrics**: Performance tracking and usage analytics
+7. **Web API**: RESTful API wrapper for the CLI functionality
+8. **Voice Marketplace**: Integration with voice model marketplaces
+9. **Multi-language Support**: Automatic language detection and switching
+10. **Retry Logic**: Exponential backoff for network failures
 
 ## Conclusion
 

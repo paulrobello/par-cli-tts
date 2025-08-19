@@ -20,13 +20,13 @@ class ModelDownloader:
         "kokoro-v1.0.onnx": {
             "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx",
             "size_mb": 88,  # Approximate size in MB
-            "sha256": None,  # Could add hash verification if available
+            "sha256": "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb",
             "filename": "kokoro-v1.0.onnx",  # Save as standard name
         },
         "voices-v1.0.bin": {
             "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
             "size_mb": 18,  # Approximate size in MB
-            "sha256": None,
+            "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
             "filename": "voices-v1.0.bin",
         },
     }
@@ -56,15 +56,20 @@ class ModelDownloader:
         model_path, voice_path = self.get_model_paths()
         return model_path.exists() and voice_path.exists()
 
-    def _download_file(self, url: str, dest_path: Path, description: str, size_mb: int) -> None:
-        """Download a file with progress indication.
+    def _download_file(
+        self, url: str, dest_path: Path, description: str, size_mb: int, sha256: str | None = None
+    ) -> None:
+        """Download a file with progress indication and optional checksum verification.
 
         Args:
             url: URL to download from.
             dest_path: Destination file path.
             description: Description for progress bar.
             size_mb: Approximate size in MB for display.
+            sha256: Optional SHA256 checksum for verification.
         """
+        from src.utils import verify_file_checksum
+
         try:
             # Create a temporary file first
             temp_path = dest_path.with_suffix(".tmp")
@@ -92,6 +97,14 @@ class ModelDownloader:
 
                 # Download the file
                 urllib.request.urlretrieve(url, temp_path, reporthook=download_hook)
+
+                # Verify checksum if provided
+                if sha256:
+                    console.print("[dim]Verifying checksum...[/dim]")
+                    if not verify_file_checksum(temp_path, sha256):
+                        temp_path.unlink()
+                        raise RuntimeError(f"Checksum verification failed for {description}")
+                    console.print("[green]✓ Checksum verified[/green]")
 
                 # Move temp file to final destination
                 temp_path.rename(dest_path)
@@ -133,7 +146,9 @@ class ModelDownloader:
         if force or not model_path.exists():
             model_info = self.MODELS["kokoro-v1.0.onnx"]
             console.print(f"📥 Downloading ONNX model ([cyan]~{model_info['size_mb']} MB[/cyan])...")
-            self._download_file(model_info["url"], model_path, "kokoro-v1.0.onnx", model_info["size_mb"])
+            self._download_file(
+                model_info["url"], model_path, "kokoro-v1.0.onnx", model_info["size_mb"], model_info.get("sha256")
+            )
             console.print(f"[green]✓[/green] Model downloaded: {model_path.name}\n")
         else:
             console.print(f"[green]✓[/green] Model already exists: {model_path.name}")
@@ -142,7 +157,9 @@ class ModelDownloader:
         if force or not voice_path.exists():
             voice_info = self.MODELS["voices-v1.0.bin"]
             console.print(f"📥 Downloading voice embeddings ([cyan]~{voice_info['size_mb']} MB[/cyan])...")
-            self._download_file(voice_info["url"], voice_path, "voices-v1.0.bin", voice_info["size_mb"])
+            self._download_file(
+                voice_info["url"], voice_path, "voices-v1.0.bin", voice_info["size_mb"], voice_info.get("sha256")
+            )
             console.print(f"[green]✓[/green] Voices downloaded: {voice_path.name}\n")
         else:
             console.print(f"[green]✓[/green] Voices already exist: {voice_path.name}")

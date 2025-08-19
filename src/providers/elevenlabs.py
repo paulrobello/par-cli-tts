@@ -1,5 +1,6 @@
 """ElevenLabs TTS provider implementation."""
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +57,7 @@ class ElevenLabsProvider(TTSProvider):
         stability: float = 0.5,
         similarity_boost: float = 0.5,
         **kwargs: Any,
-    ) -> bytes:
+    ) -> bytes | Iterator[bytes]:
         """
         Generate speech from text using ElevenLabs.
 
@@ -69,7 +70,7 @@ class ElevenLabsProvider(TTSProvider):
             **kwargs: Additional parameters.
 
         Returns:
-            Audio data as bytes.
+            Audio data as bytes or iterator.
         """
         if model is None:
             model = self.default_model
@@ -84,9 +85,8 @@ class ElevenLabsProvider(TTSProvider):
             ),
         )
 
-        # Convert generator to bytes
-        audio_bytes = b"".join(audio)
-        return audio_bytes
+        # Return the generator directly for memory-efficient streaming
+        return audio
 
     def list_voices(self) -> list[Voice]:
         """
@@ -131,21 +131,37 @@ class ElevenLabsProvider(TTSProvider):
             update_cache_if_needed=True,
         )
 
-    def save_audio(self, audio_data: bytes, file_path: str | Path) -> None:
+    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
         """
         Save audio data to a file.
 
         Args:
-            audio_data: Audio data to save.
+            audio_data: Audio data to save (bytes or iterator).
             file_path: Path to save the audio file.
         """
-        save(audio_data, str(file_path))
+        # Handle both bytes and iterators
+        if isinstance(audio_data, bytes):
+            save(audio_data, str(file_path))
+        else:
+            # For iterators, use the stream_to_file method
+            self.stream_to_file(audio_data, file_path)
 
-    def play_audio(self, audio_data: bytes) -> None:
+    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
         """
         Play audio data.
 
         Args:
             audio_data: Audio data to play.
+            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
+                   Note: ElevenLabs play() doesn't support volume, will use system default.
         """
-        play(audio_data)
+        # For play, we need to convert iterator to bytes
+        if isinstance(audio_data, bytes):
+            play(audio_data)
+        else:
+            # Convert iterator to bytes for playback
+            audio_bytes = b"".join(audio_data)
+            play(audio_bytes)
+
+        # Note: ElevenLabs play() function doesn't support volume control
+        # Consider using system players with volume support if needed

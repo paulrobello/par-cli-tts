@@ -25,13 +25,16 @@ app_help:		# Show app help
 list-voices:		# List available voices
 	$(run) par-tts "dummy" --list
 
-.PHONY: update-cache
-update-cache:		# Update voice cache
-	$(run) par-tts "dummy" --update-cache
+.PHONY: refresh-cache
+refresh-cache:		# Force refresh voice cache (ElevenLabs)
+	$(run) par-tts --refresh-cache --provider elevenlabs
 
 .PHONY: clear-cache
-clear-cache:		# Clear voice cache
-	$(run) par-tts "dummy" --clear-cache
+clear-cache:		# Clear voice cache including samples
+	$(run) par-tts --clear-cache-samples --provider elevenlabs
+
+.PHONY: update-cache
+update-cache: refresh-cache		# Alias for refresh-cache
 
 ##############################################################################
 # Kokoro ONNX model management

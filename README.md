@@ -5,34 +5,49 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.1.0-green.svg)
+![Version](https://img.shields.io/badge/version-0.2.0-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
-## 🆕 What's New in v0.1.0
+## 🆕 What's New in v0.2.0
 
-**✨ Initial Release**: Multi-provider TTS with ElevenLabs, OpenAI, and Kokoro ONNX support
-- 🎭 **Multiple Providers** - Seamless switching between ElevenLabs, OpenAI, and Kokoro ONNX
-- 🎯 **Voice Name Resolution** - Use friendly names instead of IDs
-- ⚡ **Smart Caching** - 7-day voice cache for ElevenLabs
-- 🎨 **Rich Terminal Output** - Beautiful colored output with progress
-- 🔊 **Flexible Audio Output** - Play directly or save to file
-- 🚀 **Offline Support** - Kokoro ONNX runs locally without API requirements
+**✨ Major Update**: Configuration files, smarter caching, consistent error handling, and more!
+
+### New Features
+- 📝 **Configuration File Support** - Set defaults in `~/.config/par-tts/config.yaml`
+- 🔄 **Smarter Voice Cache** - Change detection, manual refresh, and voice sample caching
+- ❌ **Consistent Error Handling** - Clear error messages with proper exit codes
+- 📥 **Multiple Input Methods** - Direct text, stdin piping, and file input (`@filename`)
+- 🔊 **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- 👂 **Voice Preview** - Test voices with sample text before using
+
+### Improvements
+- 🔒 **Enhanced Security** - API key sanitization in debug output
+- 🚀 **Memory Efficiency** - Stream audio directly to files without buffering
+- ✅ **Model Verification** - SHA256 checksum verification for downloads
+- 🎯 **Better CLI** - All options now have short versions for quick access
+- 💾 **Cache Management** - New commands for cache refresh and cleanup
 
 ## Features
 
 - 🎭 **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, and Kokoro ONNX with easy provider switching
-- 🎯 **Voice Name Support** - Use voice names like "Rachel" or "nova" instead of cryptic IDs
-- ⚡ **Smart Voice Caching** - ElevenLabs voice data cached for 7 days for faster lookups
+- 📝 **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
+- 📥 **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
+- 🎯 **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
+- 🔊 **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- 👂 **Voice Preview** - Test voices with sample text using `--preview-voice`
+- ⚡ **Smart Voice Caching** - Change detection, auto-refresh, and voice sample caching
 - 🔍 **Partial Name Matching** - Type "char" to match "Charlotte" (ElevenLabs)
-- 💾 **XDG-Compliant Cache** - Proper cache directory management across platforms
+- 💾 **XDG-Compliant Storage** - Proper cache and data directory management across platforms
 - 🎨 **Rich Terminal Output** - Beautiful colored output with progress indicators
-- 🔊 **Flexible Audio Output** - Play directly or save to file with custom locations
+- 🚀 **Memory Efficient** - Stream audio directly to files without memory buffering
+- 🔒 **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
+- ❌ **Consistent Error Handling** - Clear error messages with categorized exit codes
 - 🎚️ **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI
-- 🛠️ **Debug Mode** - Comprehensive debugging with --debug and --dump options
+- 🛠️ **Debug Mode** - Comprehensive debugging with sanitized output
 - 📁 **Smart File Management** - Automatic cleanup or preservation of audio files
 
 ## Technology Stack
@@ -160,6 +175,46 @@ When these environment variables are set, automatic download is disabled.
 
 ## Configuration
 
+### Configuration File (Recommended)
+
+Create a configuration file to set your default preferences:
+
+```bash
+# Create a sample config file
+par-tts --create-config
+
+# Edit the config file
+$EDITOR ~/.config/par-tts/config.yaml
+```
+
+Example configuration file:
+
+```yaml
+# Default provider (elevenlabs, openai, kokoro-onnx)
+provider: kokoro-onnx
+
+# Default voice
+voice: Rachel
+
+# Output settings
+output_dir: ~/Documents/audio
+keep_temp: false
+
+# Audio settings
+volume: 1.2
+speed: 1.0
+
+# ElevenLabs specific
+stability: 0.5
+similarity_boost: 0.75
+
+# Behavior settings
+play_audio: true
+debug: false
+```
+
+### Environment Variables
+
 Create a `.env` file in your project directory with your API keys:
 
 ```bash
@@ -173,15 +228,15 @@ OPENAI_API_KEY=your_openai_key_here
 # KOKORO_VOICE_PATH=/path/to/voices-v1.0.bin
 
 # Optional: Default provider (elevenlabs, openai, or kokoro-onnx)
-TTS_PROVIDER=elevenlabs
+TTS_PROVIDER=kokoro-onnx
 
 # Optional: Default voices
-ELEVENLABS_VOICE_ID=Rachel  # or use voice ID
+ELEVENLABS_VOICE_ID=Juniper  # or use voice ID
 OPENAI_VOICE_ID=nova        # alloy, echo, fable, onyx, nova, shimmer
 KOKORO_VOICE_ID=af_sarah    # See available voices with --list
 
 # Optional: General voice (overrides provider-specific)
-TTS_VOICE_ID=Rachel
+TTS_VOICE_ID=Juniper
 ```
 
 ## Usage
@@ -193,17 +248,26 @@ If installed from PyPI:
 # Simple text-to-speech with default provider
 par-tts "Hello, world!"
 
+# Pipe text from another command
+echo "Hello from pipe" | par-tts
+
+# Read text from a file
+par-tts @input.txt
+
 # Use OpenAI provider
 par-tts "Hello" --provider openai --voice nova
 
 # Use ElevenLabs with voice by name
-par-tts "Hello" --voice Rachel
+par-tts "Hello" --provider elevenlabs --voice Juniper
 
 # Use Kokoro ONNX (offline, auto-downloads models on first use)
 par-tts "Hello" --provider kokoro-onnx --voice af_sarah
 
-# Save to file
-par-tts "Save this" --output audio.mp3
+# Preview a voice before using it
+par-tts --preview-voice Rachel --provider elevenlabs
+
+# Save to file with custom volume
+par-tts "Save this" --output audio.mp3 --volume 1.5
 ```
 
 If running from source:
@@ -215,7 +279,7 @@ uv run par-tts "Hello, world!"
 uv run par-tts "Hello" --provider openai --voice nova
 
 # Use ElevenLabs with voice by name
-uv run par-tts "Hello" --voice Rachel
+uv run par-tts "Hello" --provider elevenlabs --voice Juniper
 
 # Use Kokoro ONNX (offline, auto-downloads models on first use)
 uv run par-tts "Hello" --provider kokoro-onnx --voice af_sarah
@@ -227,14 +291,26 @@ uv run par-tts "Save this" --output audio.mp3
 ### Basic Examples
 
 ```bash
-# Simple text-to-speech with default provider (ElevenLabs)
+# Simple text-to-speech with default provider (Kokoro ONNX - offline)
 par-tts "Hello, world!"
+
+# Input from stdin (pipe)
+echo "Hello from stdin" | par-tts
+cat script.txt | par-tts --voice nova
+
+# Input from file
+par-tts @speech.txt
+par-tts @/path/to/long-text.md --provider openai
+
+# Preview voices before using them
+par-tts --preview-voice Juniper --provider elevenlabs
+par-tts -V af_sarah --provider kokoro-onnx
 
 # Use OpenAI provider
 par-tts "Hello from OpenAI" --provider openai --voice nova
 
 # Use ElevenLabs with voice by name
-par-tts "Hello from ElevenLabs" --provider elevenlabs --voice Rachel
+par-tts "Hello from ElevenLabs" --provider elevenlabs --voice Juniper
 
 # Use Kokoro ONNX with language specification
 par-tts "Hello from Kokoro" --provider kokoro-onnx --voice af_sarah --lang en-us
@@ -244,6 +320,10 @@ par-tts "Hello" --voice char  # matches Charlotte
 
 # Save to file without playing
 par-tts "Save this audio" --output audio.mp3 --no-play
+
+# Adjust volume (0.0 = silent, 1.0 = normal, 2.0 = double)
+par-tts "Louder please" --volume 1.5
+par-tts "Whisper quiet" -w 0.3
 
 # Adjust ElevenLabs voice settings
 par-tts "Stable voice" --stability 0.8 --similarity 0.7
@@ -263,22 +343,64 @@ par-tts "Save here" --output my_file.mp3 --temp-dir ./audio_files
 
 ### Advanced Usage
 
+#### Input Methods
+
+```bash
+# Direct text input
+par-tts "Direct text input"
+
+# From stdin (automatic detection)
+echo "Piped input" | par-tts
+
+# From stdin (explicit)
+par-tts - < input.txt
+
+# From file
+par-tts @readme.md
+par-tts @/absolute/path/to/file.txt
+
+# Chain commands
+fortune | par-tts --voice nova
+curl -s https://api.example.com/text | par-tts
+```
+
 #### Provider Management
 
 ```bash
 # List available providers
-par-tts "dummy" --list-providers
+par-tts --list-providers
+par-tts -L
 
 # List voices for a specific provider
-par-tts "dummy" --provider openai --list
-par-tts "dummy" --provider elevenlabs --list
-par-tts "dummy" --provider kokoro-onnx --list
+par-tts --provider openai --list
+par-tts -P elevenlabs -l
+par-tts --provider kokoro-onnx --list
 
-# Show debug information
+# Preview voices
+par-tts --preview-voice nova --provider openai
+par-tts -V Juniper -P elevenlabs
+
+# Show debug information (with sanitized API keys)
 par-tts "Test" --debug
+par-tts "Test" -d
 
 # Show configuration
 par-tts "Test" --dump
+par-tts "Test" -D
+```
+
+#### Cache Management (ElevenLabs)
+
+```bash
+# Force refresh voice cache
+par-tts --refresh-cache --provider elevenlabs
+
+# Clear cached voice samples
+par-tts --clear-cache-samples --provider elevenlabs
+
+# Or use Makefile commands
+make refresh-cache   # Force refresh voice cache
+make clear-cache     # Clear voice cache including samples
 ```
 
 #### Output File Behavior
@@ -296,7 +418,7 @@ par-tts "Test" --dump
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `text` | | Text to convert to speech (required) | |
-| `--provider` | `-P` | TTS provider to use (elevenlabs, openai, kokoro-onnx) | elevenlabs |
+| `--provider` | `-P` | TTS provider to use (elevenlabs, openai, kokoro-onnx) | kokoro-onnx |
 | `--voice` | `-v` | Voice name or ID to use | Provider default |
 | `--output` | `-o` | Output file path | None (temp file) |
 | `--model` | `-m` | Model to use (provider-specific) | Provider default |
@@ -313,15 +435,15 @@ par-tts "Test" --dump
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--speed` | | Speech speed (0.25 to 4.0) | 1.0 |
+| `--speed` | `-r` | Speech speed (0.25 to 4.0) | 1.0 |
 | `--format` | `-f` | Audio format (mp3, opus, aac, flac, wav) | mp3 |
 
 ### Kokoro ONNX Options
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--lang` | | Language code (e.g., en-us) | en-us |
-| `--speed` | | Speech speed multiplier | 1.0 |
+| `--lang` | `-g` | Language code (e.g., en-us) | en-us |
+| `--speed` | `-r` | Speech speed multiplier | 1.0 |
 
 ### File Management
 
@@ -329,15 +451,20 @@ par-tts "Test" --dump
 |--------|-------|-------------|---------|
 | `--keep-temp` | `-k` | Keep temporary audio files after playback | False |
 | `--temp-dir` | `-t` | Directory for temporary audio files | System temp |
+| `--volume` | `-w` | Playback volume (0.0-5.0, 1.0=normal) | 1.0 |
 
 ### Utility Options
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--debug` | `-d` | Show debug information | False |
+| `--debug` | `-d` | Show debug information (API keys sanitized) | False |
 | `--dump` | `-D` | Dump configuration and exit | False |
 | `--list` | `-l` | List available voices for provider | False |
+| `--preview-voice` | `-V` | Preview a voice with sample text | None |
 | `--list-providers` | `-L` | List available TTS providers | False |
+| `--create-config` | | Create sample configuration file | False |
+| `--refresh-cache` | | Force refresh voice cache (ElevenLabs) | False |
+| `--clear-cache-samples` | | Clear cached voice samples | False |
 
 ## Providers
 
@@ -346,7 +473,11 @@ par-tts "Test" --dump
 - **Models**: eleven_monolingual_v1, eleven_multilingual_v1, eleven_multilingual_v2
 - **Voices**: 25+ voices with different accents and styles
 - **Features**: Voice cloning, stability control, similarity boost
-- **Caching**: Automatic 7-day cache for voice listings
+- **Smart Caching**:
+  - Automatic 7-day cache for voice listings
+  - Change detection via hashing
+  - Voice sample caching for offline preview
+  - Manual refresh with `--refresh-cache`
 - **API Key**: Set `ELEVENLABS_API_KEY` in your .env file
 
 ### OpenAI
@@ -448,14 +579,24 @@ par-cli-tts/
 │   ├── __init__.py
 │   ├── tts_cli.py           # Main CLI application
 │   ├── voice_cache.py       # Voice caching system
+│   ├── model_downloader.py  # Kokoro model download manager
+│   ├── utils.py             # Utility functions (streaming, security)
+│   ├── config.py            # Configuration dataclasses
+│   ├── config_file.py       # Configuration file management
+│   ├── errors.py            # Error handling utilities
 │   └── providers/           # TTS provider implementations
 │       ├── __init__.py
 │       ├── base.py          # Abstract base provider
 │       ├── elevenlabs.py    # ElevenLabs implementation
-│       └── openai.py        # OpenAI implementation
+│       ├── openai.py        # OpenAI implementation
+│       └── kokoro_onnx.py   # Kokoro ONNX implementation
+├── docs/
+│   ├── ARCHITECTURE.md      # System architecture documentation
+│   └── CLAUDE.md            # Development guidelines
 ├── .env.example             # Example environment file
 ├── pyproject.toml           # Project configuration
 ├── Makefile                 # Development commands
+├── CLAUDE.md                # AI assistant context
 └── README.md                # This file
 ```
 
@@ -467,23 +608,36 @@ par-cli-tts/
    - Ensure your `.env` file contains the correct API keys
    - Check that the `.env` file is in the current directory
    - Verify environment variable names match exactly
+   - Note: Kokoro ONNX doesn't require an API key
 
 2. **Voice Not Found**
    - Use `--list` to see available voices for your provider
    - Check spelling and capitalization of voice names
-   - For ElevenLabs, wait for cache to update or run `make update-cache`
+   - For ElevenLabs, use `--refresh-cache` to update voice list
 
-3. **Audio Not Playing**
+3. **Configuration File Issues**
+   - Run `--create-config` to generate a sample config
+   - Check file location: `~/.config/par-tts/config.yaml`
+   - Verify YAML syntax (use spaces, not tabs)
+   - CLI arguments override config file settings
+
+4. **Cache Problems (ElevenLabs)**
+   - Force refresh with `--refresh-cache`
+   - Clear samples with `--clear-cache-samples`
+   - Cache updates automatically detect changes every 24 hours
+
+5. **Audio Not Playing**
    - Ensure you have audio output devices connected
    - Check system volume settings
+   - Try adjusting `--volume` flag
    - On Linux, verify audio subsystem (ALSA/PulseAudio) is working
 
-4. **Slow Response Times**
-   - ElevenLabs voice cache may be updating (happens every 7 days)
-   - Network connection may be slow
-   - Try using `--debug` to see detailed timing information
+6. **Slow Response Times**
+   - Voice previews are cached after first use
+   - Use `--debug` to see detailed timing information
+   - Kokoro ONNX models download on first use (~106 MB)
 
-5. **File Not Saved**
+7. **File Not Saved**
    - Check write permissions for the output directory
    - Ensure the path exists or parent directories can be created
    - Use absolute paths to avoid confusion

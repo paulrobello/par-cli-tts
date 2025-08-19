@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import soundfile as sf
@@ -175,12 +176,17 @@ class KokoroONNXProvider(TTSProvider):
         with open(file_path, "wb") as f:
             f.write(audio_data)
 
-    def play_audio(self, audio_data: bytes) -> None:
-        """Play audio data.
+    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
+        """Play audio data with volume control.
 
         Args:
-            audio_data: Audio data as bytes.
+            audio_data: Audio data as bytes or iterator.
+            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
         """
+        # Convert iterator to bytes if needed
+        if not isinstance(audio_data, bytes):
+            audio_data = b"".join(audio_data)
+
         # Save to temp file and play
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_file.write(audio_data)
@@ -193,15 +199,24 @@ class KokoroONNXProvider(TTSProvider):
 
             system = platform.system()
             if system == "Darwin":  # macOS
-                subprocess.run(["afplay", temp_path], check=True)
+                # afplay supports volume flag (-v)
+                subprocess.run(["afplay", "-v", str(volume), temp_path], check=True)
             elif system == "Windows":
+                # Windows doesn't have native volume control for start command
                 subprocess.run(["start", "", temp_path], shell=True, check=True)
             else:  # Linux and others
-                # Try different players in order of preference
-                players = ["aplay", "paplay", "ffplay", "mpg123"]
-                for player in players:
+                # Try different players with volume support
+                players_with_volume = [
+                    ("paplay", ["--volume", str(int(volume * 65536))]),  # paplay uses 0-65536
+                    ("ffplay", ["-volume", str(int(volume * 100)), "-nodisp", "-autoexit"]),  # ffplay uses 0-100
+                    ("mpg123", ["-f", str(int(volume * 32768))]),  # mpg123 uses scale factor
+                    ("aplay", []),  # aplay doesn't support volume directly
+                ]
+
+                for player, volume_args in players_with_volume:
                     try:
-                        subprocess.run([player, temp_path], check=True)
+                        cmd = [player] + volume_args + [temp_path]
+                        subprocess.run(cmd, check=True)
                         break
                     except (subprocess.CalledProcessError, FileNotFoundError):
                         continue
