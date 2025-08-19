@@ -230,8 +230,6 @@ test_*.wav
 # Pre-commit
 .pre-commit-config.yaml
 
-# UV
-uv.lock
 
 # Profiling
 *.prof
@@ -271,9 +269,3 @@ junit.xml
 # Documentation builds
 docs/_build/
 docs/.doctrees/
-
-# Package manager files
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
-bun.lockb
