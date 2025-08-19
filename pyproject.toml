@@ -1,0 +1,110 @@
+[project]
+name = "par-cli-tts"
+dynamic = [
+    "version",
+]
+description = "PAR CLI TTS - Command line text-to-speech tool using ElevenLabs with voice caching and name resolution"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Paul Robello", email = "probello@gmail.com" },
+]
+maintainers = [
+    { name = "Paul Robello", email = "probello@gmail.com" },
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Typing :: Typed",
+]
+keywords = [
+    "tts",
+    "text-to-speech",
+    "elevenlabs",
+    "cli",
+    "audio",
+]
+dependencies = [
+    "elevenlabs>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "platformdirs>=4.3.0",
+    "pyyaml>=6.0.0",
+    "openai>=1.100.1",
+    "kokoro-onnx>=0.4.9",
+    "soundfile>=0.13.1",
+]
+
+[project.license]
+file = "LICENSE"
+
+[project.urls]
+Homepage = "https://github.com/paulrobello/par-cli-tts"
+Documentation = "https://github.com/paulrobello/par-cli-tts/blob/main/README.md"
+Repository = "https://github.com/paulrobello/par-cli-tts"
+Issues = "https://github.com/paulrobello/par-cli-tts/issues"
+Discussions = "https://github.com/paulrobello/par-cli-tts/discussions"
+Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
+
+[project.scripts]
+par-tts = "src.tts_cli:app"
+par-tts-kokoro = "src.kokoro_cli:app"
+
+[build-system]
+requires = [
+    "hatchling",
+    "wheel",
+]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "build>=1.3.0",
+    "pyright>=1.1.403",
+    "pre-commit>=4.2.0",
+    "ruff>=0.12.7",
+    "hatchling>=1.27.0",
+]
+
+[tool.hatch.version]
+path = "src/__init__.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src",
+]
+include = [
+    "py.typed",
+    "**/*.py",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+]
+exclude = [
+    "*.pyc",
+    "__pycache__",
+    "*.so",
+    "*.dylib",
+]
