@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 from openai import OpenAI
 from rich.console import Console
 
@@ -35,7 +36,9 @@ class OpenAIProvider(TTSProvider):
             **kwargs: Additional configuration.
         """
         super().__init__(api_key, **kwargs)
-        self.client = OpenAI(api_key=api_key, timeout=kwargs.get("timeout", 10.0))
+        # Create httpx client with SSL verification disabled
+        http_client = httpx.Client(verify=False, timeout=kwargs.get("timeout", 10.0))
+        self.client = OpenAI(api_key=api_key, http_client=http_client)
 
     @property
     def name(self) -> str:

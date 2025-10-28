@@ -1,5 +1,6 @@
 """Model downloader for Kokoro ONNX TTS models."""
 
+import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -94,6 +95,16 @@ class ModelDownloader:
                         # Update progress
                         downloaded = block_num * block_size
                         progress.update(task, completed=min(downloaded, total_size))
+
+                # Create SSL context that doesn't verify certificates
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+
+                # Install opener with SSL verification disabled
+                https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+                opener = urllib.request.build_opener(https_handler)
+                urllib.request.install_opener(opener)
 
                 # Download the file
                 urllib.request.urlretrieve(url, temp_path, reporthook=download_hook)

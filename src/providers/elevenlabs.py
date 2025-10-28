@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import httpx
 from elevenlabs import VoiceSettings, play, save
 from elevenlabs.client import ElevenLabs
 from rich.console import Console
@@ -26,7 +27,9 @@ class ElevenLabsProvider(TTSProvider):
             **kwargs: Additional configuration.
         """
         super().__init__(api_key, **kwargs)
-        self.client = ElevenLabs(api_key=api_key, timeout=kwargs.get("timeout", 10.0))
+        # Create httpx client with SSL verification disabled
+        http_client = httpx.Client(verify=False, timeout=kwargs.get("timeout", 10.0))
+        self.client = ElevenLabs(api_key=api_key, httpx_client=http_client)
         self.cache = VoiceCache(app_name="par-tts-elevenlabs")
 
     @property

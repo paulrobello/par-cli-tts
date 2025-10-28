@@ -5,14 +5,18 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.2.1-green.svg)
+![Version](https://img.shields.io/badge/version-0.2.2-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
-## 🆕 What's New
+## What's New
+
+### v0.2.2
+- Updated all HTTP requests and downloaders to ignore SSL certificate errors
+- Improves compatibility with corporate proxies and development environments
 
 ### v0.2.1
 - Updated dependencies
@@ -20,41 +24,41 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 
 ### v0.2.0
 
-**✨ Major Update**: Configuration files, smarter caching, consistent error handling, and more!
+**Major Update**: Configuration files, smarter caching, consistent error handling, and more!
 
 ### New Features
-- 📝 **Configuration File Support** - Set defaults in `~/.config/par-tts/config.yaml`
-- 🔄 **Smarter Voice Cache** - Change detection, manual refresh, and voice sample caching
-- ❌ **Consistent Error Handling** - Clear error messages with proper exit codes
-- 📥 **Multiple Input Methods** - Direct text, stdin piping, and file input (`@filename`)
-- 🔊 **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
-- 👂 **Voice Preview** - Test voices with sample text before using
+- **Configuration File Support** - Set defaults in `~/.config/par-tts/config.yaml`
+- **Smarter Voice Cache** - Change detection, manual refresh, and voice sample caching
+- **Consistent Error Handling** - Clear error messages with proper exit codes
+- **Multiple Input Methods** - Direct text, stdin piping, and file input (`@filename`)
+- **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- **Voice Preview** - Test voices with sample text before using
 
 ### Improvements
-- 🔒 **Enhanced Security** - API key sanitization in debug output
-- 🚀 **Memory Efficiency** - Stream audio directly to files without buffering
-- ✅ **Model Verification** - SHA256 checksum verification for downloads
-- 🎯 **Better CLI** - All options now have short versions for quick access
-- 💾 **Cache Management** - New commands for cache refresh and cleanup
+- **Enhanced Security** - API key sanitization in debug output
+- **Memory Efficiency** - Stream audio directly to files without buffering
+- **Model Verification** - SHA256 checksum verification for downloads
+- **Better CLI** - All options now have short versions for quick access
+- **Cache Management** - New commands for cache refresh and cleanup
 
 ## Features
 
-- 🎭 **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, and Kokoro ONNX with easy provider switching
-- 📝 **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
-- 📥 **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
-- 🎯 **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
-- 🔊 **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
-- 👂 **Voice Preview** - Test voices with sample text using `--preview-voice`
-- ⚡ **Smart Voice Caching** - Change detection, auto-refresh, and voice sample caching
-- 🔍 **Partial Name Matching** - Type "char" to match "Charlotte" (ElevenLabs)
-- 💾 **XDG-Compliant Storage** - Proper cache and data directory management across platforms
-- 🎨 **Rich Terminal Output** - Beautiful colored output with progress indicators
-- 🚀 **Memory Efficient** - Stream audio directly to files without memory buffering
-- 🔒 **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
-- ❌ **Consistent Error Handling** - Clear error messages with categorized exit codes
-- 🎚️ **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI
-- 🛠️ **Debug Mode** - Comprehensive debugging with sanitized output
-- 📁 **Smart File Management** - Automatic cleanup or preservation of audio files
+- **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, and Kokoro ONNX with easy provider switching
+- **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
+- **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
+- **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
+- **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- **Voice Preview** - Test voices with sample text using `--preview-voice`
+- **Smart Voice Caching** - Change detection, auto-refresh, and voice sample caching
+- **Partial Name Matching** - Type "char" to match "Charlotte" (ElevenLabs)
+- **XDG-Compliant Storage** - Proper cache and data directory management across platforms
+- **Rich Terminal Output** - Beautiful colored output with progress indicators
+- **Memory Efficient** - Stream audio directly to files without memory buffering
+- **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
+- **Consistent Error Handling** - Clear error messages with categorized exit codes
+- **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI
+- **Debug Mode** - Comprehensive debugging with sanitized output
+- **Smart File Management** - Automatic cleanup or preservation of audio files
 
 ## Technology Stack
 
@@ -702,7 +706,7 @@ GitHub: [@paulrobello](https://github.com/paulrobello)
 ## Support
 
 If you find this tool useful, consider:
-- ⭐ Starring the repository
-- 🐛 Reporting bugs or requesting features
-- 📖 Improving documentation
-- ☕ [Buying me a coffee](https://buymeacoffee.com/probello3)
+- Starring the repository
+- Reporting bugs or requesting features
+- Improving documentation
+- [Buying me a coffee](https://buymeacoffee.com/probello3)
