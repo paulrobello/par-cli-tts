@@ -2,19 +2,16 @@ name: Publish 🐍 📦 to TestPyPI
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Build and Test 🐍 distribution 📦"]
-    types:
-      - completed
-    branches:
-      - main
 
 jobs:
+  setup:
+    uses: ./.github/workflows/reusable-setup.yml
+
   publish-to-testpypi:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch'  # Only allow manual triggers
     name: Publish 🐍 distribution 📦 to TestPyPI
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    needs: setup
     environment:
       name: testpypi
       url: https://test.pypi.org/p/par-cli-tts
@@ -27,47 +24,22 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          uv sync --all-groups
-
-      - name: Get version from __init__.py
-        id: get_version
-        run: |
-          version=$(uv run python -c "from src import __version__; print(__version__)")
-          echo "Raw version output: $version"
-          echo "VERSION=$version" >> $GITHUB_ENV
-
-      - name: Check version
-        id: check_version
-        run: |
-          echo "Version in env: ${{ env.VERSION }}"
-          if [ -z "${{ env.VERSION }}" ]; then
-            echo "Error: VERSION is empty"
-            exit 1
-          fi
 
       - name: Restore cached build artifacts
         id: cache
         uses: actions/cache@v4
         with:
           path: dist
-          key: ${{ runner.os }}-3.12-x64-${{ hashFiles('**/pyproject.toml') }}-${{ github.sha }}
+          key: dist-${{ runner.os }}-3.13-x64-${{ hashFiles('**/pyproject.toml', 'src/**/*.py') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-3.12-x64-${{ hashFiles('**/pyproject.toml') }}-
-            ${{ runner.os }}-3.12-x64-
+            dist-${{ runner.os }}-3.13-x64-${{ hashFiles('**/pyproject.toml', 'src/**/*.py') }}-
+            dist-${{ runner.os }}-3.13-x64-
+          fail-on-cache-miss: false
 
-      - name: Build if artifacts not cached
+      - name: Build package if cache miss
         if: steps.cache.outputs.cache-hit != 'true'
         run: make package-all
+        timeout-minutes: 15
 
       - name: Publish distribution 📦 to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -80,10 +52,26 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: 'The project {{ EVENT_PAYLOAD.repository.full_name }} ${{ env.VERSION }} has been published to TestPyPI.'
+          args: 'The project {{ EVENT_PAYLOAD.repository.full_name }} ${{ needs.setup.outputs.version }} has been published to TestPyPI.'
         continue-on-error: true
 
-      - name: Cleanup on failure
-        if: failure()
-        run: |
-          rm -rf dist/ || true
+  trigger-release:
+    name: Trigger GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # Required for workflow dispatch
+    needs:
+      - setup
+      - publish-to-testpypi
+    if: success()
+    steps:
+      - name: Trigger Release workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: 'main'
+            })

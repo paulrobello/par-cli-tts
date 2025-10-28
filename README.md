@@ -5,14 +5,20 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.2.0-green.svg)
+![Version](https://img.shields.io/badge/version-0.2.1-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
-## 🆕 What's New in v0.2.0
+## 🆕 What's New
+
+### v0.2.1
+- Updated dependencies
+- Ensured Python 3.13 compatibility
+
+### v0.2.0
 
 **✨ Major Update**: Configuration files, smarter caching, consistent error handling, and more!
 
