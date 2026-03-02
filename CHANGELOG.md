@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-03-02
+
+### Added
+
+- **Claude Code output style installer** - New `par-tts-install-style` command
+  - Automatically installs TTS Summary output style to `~/.claude/output-styles/`
+  - Updates `~/.claude/settings.json` with `Bash(par-tts:*)` permission
+  - Prompts for user name to personalize audio summaries
+  - Use `--name` option to skip prompt, `--force` to overwrite existing
+  - Cross-platform compatible (Windows, macOS, Linux)
+  - Handles missing directories and corrupt settings.json gracefully
+
+- **Bundled TTS Summary output style** - Included `.claude/output-styles/tts-summary.md`
+  - Personalized audio task completion announcements
+  - Clear instructions for Claude to execute TTS commands
+  - Customizable user name and communication style
+
 ## [0.4.0] - 2025-03-02
 
 ### Added

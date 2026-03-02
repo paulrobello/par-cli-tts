@@ -5,14 +5,44 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.4.0-green.svg)
+![Version](https://img.shields.io/badge/version-0.4.1-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
+## Table of Contents
+
+- [What's New](#whats-new)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+  - [From PyPI](#installation-from-pypi-recommended)
+  - [From Source](#installation-from-source)
+  - [Kokoro ONNX Setup](#kokoro-onnx-setup)
+- [Using with AI Agents](#using-with-ai-agents)
+  - [Claude Code Setup](#claude-code-setup)
+  - [Claude Code Output Style](#claude-code-output-style)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Command Line Options](#command-line-options)
+- [Providers](#providers)
+- [Cache Locations](#cache-locations)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author](#author)
+- [Acknowledgments](#acknowledgments)
+- [Support](#support)
+
 ## What's New
+
+### v0.4.1
+- **Claude Code output style installer** - New `install-claude-style` command to automatically set up TTS audio summaries
+- **Bundled output style** - TTS Summary output style included with the package
 
 ### v0.4.0
 - **OpenAI gpt-4o-mini-tts** - New steerable TTS model with `--instructions` option
@@ -263,6 +293,89 @@ par-tts "Task completed successfully!"
 # Save audio for notifications
 par-tts "Build finished" --output /tmp/notify.mp3 --no-play
 ```
+
+### Claude Code Output Style
+
+This project includes a **TTS Summary** output style for Claude Code that provides audio announcements when tasks are completed. This creates a personalized audio feedback experience where Claude announces what it has accomplished.
+
+#### Features
+
+- Automatic audio summary at the end of every Claude Code response
+- Personalized messages addressing you by name
+- Focus on outcomes and user benefits
+- Natural, conversational language
+
+#### Installation
+
+The easiest way to install the output style is using the built-in CLI command:
+
+```bash
+# Interactive installation (prompts for your name)
+par-tts-install-style
+
+# Non-interactive with name specified
+par-tts-install-style --name "YourName"
+
+# Force overwrite if already installed
+par-tts-install-style --name "YourName" --force
+```
+
+This command will:
+1. Copy the TTS Summary output style to `~/.claude/output-styles/tts-summary.md`
+2. Update `~/.claude/settings.json` with the required `Bash(par-tts:*)` permission
+3. Personalize the output style with your name
+
+#### Prerequisites
+
+**Important**: Before using this output style, ensure:
+
+1. `par-cli-tts` is installed (see [Installation](#installation))
+2. The `install-claude-style` command has been run (automatically grants permissions)
+
+If you prefer manual installation, you can:
+1. Copy `.claude/output-styles/tts-summary.md` to `~/.claude/output-styles/`
+2. Add the following to `~/.claude/settings.json`:
+   ```json
+   {
+     "permissions": {
+       "allow": [
+         "Bash(par-tts:*)"
+       ]
+     }
+   }
+   ```
+
+#### Usage
+
+Activate the output style using the `/output-style` command in Claude Code:
+
+```
+/output-style tts-summary
+```
+
+Once activated, Claude will automatically announce completed tasks with audio feedback.
+
+#### Customization
+
+Edit `~/.claude/output-styles/tts-summary.md` to personalize the experience:
+
+1. **Change your name** - Find the `USER_NAME` variable and update it:
+   ```markdown
+   ## Variables
+   - **USER_NAME**: YourNameHere
+   ```
+
+2. **Update the heading** - Search for "Paul" and replace with your name:
+   ```markdown
+   ## Audio Summary for YourNameHere
+   ```
+
+3. **Customize the TTS command** - Use a different voice or provider:
+   ```markdown
+   par-tts "YourNameHere, task completed." --voice nova --provider openai
+   ```
+
+4. **Adjust message style** - Modify the Communication Guidelines section to change how Claude speaks to you
 
 ## Configuration
 
@@ -707,6 +820,9 @@ par-cli-tts/
 ├── docs/
 │   ├── ARCHITECTURE.md      # System architecture documentation
 │   └── CLAUDE.md            # Development guidelines
+├── .claude/
+│   └── output-styles/
+│       └── tts-summary.md   # Claude Code TTS output style
 ├── .env.example             # Example environment file
 ├── pyproject.toml           # Project configuration
 ├── Makefile                 # Development commands

@@ -63,6 +63,7 @@ Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
 [project.scripts]
 par-tts = "src.tts_cli:app"
 par-tts-kokoro = "src.kokoro_cli:app"
+par-tts-install-style = "src.install_claude_style:app"
 
 [build-system]
 requires = [
@@ -99,11 +100,13 @@ packages = [
 include = [
     "py.typed",
     "**/*.py",
+    ".claude/**/*",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src",
+    ".claude",
     "LICENSE",
     "README.md",
     "pyproject.toml",

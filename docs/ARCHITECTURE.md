@@ -148,6 +148,14 @@ The main entry point that handles:
 - File management and cleanup
 - Sanitized debug output
 
+**Related CLIs:**
+- `par-tts`: Main text-to-speech conversion
+- `par-tts-kokoro`: Kokoro ONNX model management
+- `par-tts-install-style`: Install TTS Summary output style for Claude Code
+  - Copies output style to `~/.claude/output-styles/`
+  - Updates `~/.claude/settings.json` with required permissions
+  - Prompts for user name to personalize audio summaries
+
 #### 2. Provider Abstraction (`src/providers/base.py`)
 
 Abstract base class defining the provider interface:
