@@ -8,7 +8,9 @@ from pathlib import Path
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
+from src.defaults import DEFAULT_KOKORO_VOICE
 from src.model_downloader import ModelDownloader
+from src.utils import play_audio_bytes
 
 from .base import TTSProvider, Voice
 
@@ -76,7 +78,7 @@ class KokoroONNXProvider(TTSProvider):
     @property
     def default_voice(self) -> str:
         """Default voice ID."""
-        return "af_sarah"
+        return DEFAULT_KOKORO_VOICE
 
     def list_voices(self) -> list[Voice]:
         """List available voices.
@@ -187,42 +189,4 @@ class KokoroONNXProvider(TTSProvider):
         if not isinstance(audio_data, bytes):
             audio_data = b"".join(audio_data)
 
-        # Save to temp file and play
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_file.write(audio_data)
-            temp_path = temp_file.name
-
-        try:
-            # Use system command to play audio
-            import platform
-            import subprocess
-
-            system = platform.system()
-            if system == "Darwin":  # macOS
-                # afplay supports volume flag (-v)
-                subprocess.run(["afplay", "-v", str(volume), temp_path], check=True)
-            elif system == "Windows":
-                # Windows doesn't have native volume control for start command
-                subprocess.run(["start", "", temp_path], shell=True, check=True)
-            else:  # Linux and others
-                # Try different players with volume support
-                players_with_volume = [
-                    ("paplay", ["--volume", str(int(volume * 65536))]),  # paplay uses 0-65536
-                    ("ffplay", ["-volume", str(int(volume * 100)), "-nodisp", "-autoexit"]),  # ffplay uses 0-100
-                    ("mpg123", ["-f", str(int(volume * 32768))]),  # mpg123 uses scale factor
-                    ("aplay", []),  # aplay doesn't support volume directly
-                ]
-
-                for player, volume_args in players_with_volume:
-                    try:
-                        cmd = [player] + volume_args + [temp_path]
-                        subprocess.run(cmd, check=True)
-                        break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
-                        continue
-                else:
-                    raise RuntimeError("No audio player found. Install aplay, paplay, ffplay, or mpg123.")
-        finally:
-            # Clean up temp file
-            if Path(temp_path).exists():
-                Path(temp_path).unlink()
+        play_audio_bytes(audio_data, volume=volume, suffix=".wav")

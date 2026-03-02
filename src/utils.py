@@ -1,6 +1,9 @@
 """Utility functions for PAR CLI TTS."""
 
 import hashlib
+import subprocess
+import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -99,3 +102,82 @@ def calculate_file_checksum(file_path: Path, algorithm: str = "sha256") -> str:
             hasher.update(chunk)
 
     return hasher.hexdigest()
+
+
+def looks_like_voice_id(identifier: str, min_length: int = 20) -> bool:
+    """Check if identifier looks like a voice ID rather than a name.
+
+    Voice IDs are typically long alphanumeric strings, while voice names
+    are shorter and may contain spaces or special characters.
+
+    Args:
+        identifier: The string to check.
+        min_length: Minimum length to consider as a potential voice ID.
+            Defaults to 20 characters.
+
+    Returns:
+        True if the identifier appears to be a voice ID, False otherwise.
+    """
+    return len(identifier) >= min_length and identifier.replace("_", "").isalnum()
+
+
+def play_audio_with_player(file_path: Path, volume: float = 1.0) -> None:
+    """Play audio using system player with volume support.
+
+    This function detects the operating system and uses the appropriate
+    audio player with volume control support.
+
+    Args:
+        file_path: Path to the audio file to play.
+        volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double).
+
+    Raises:
+        RuntimeError: If no suitable audio player is found on Linux.
+    """
+    if sys.platform == "darwin":  # macOS
+        # afplay supports volume flag (-v)
+        subprocess.run(["afplay", "-v", str(volume), str(file_path)], check=True)
+    elif sys.platform == "win32":  # Windows
+        # Windows doesn't have native volume control for start command
+        subprocess.run(["start", "", str(file_path)], shell=True, check=True)
+    else:  # Linux and others
+        # Try common audio players with volume support
+        players_with_volume = [
+            ("paplay", ["--volume", str(int(volume * 65536))]),  # paplay uses 0-65536
+            ("ffplay", ["-volume", str(int(volume * 100)), "-nodisp", "-autoexit"]),  # ffplay uses 0-100
+            ("mpg123", ["-f", str(int(volume * 32768))]),  # mpg123 uses scale factor
+            ("aplay", []),  # aplay doesn't support volume directly
+        ]
+
+        for player, volume_args in players_with_volume:
+            try:
+                cmd = [player] + volume_args + [str(file_path)]
+                subprocess.run(cmd, check=True)
+                return
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+
+        raise RuntimeError("No audio player found. Install aplay, paplay, ffplay, or mpg123.")
+
+
+def play_audio_bytes(audio_data: bytes, volume: float = 1.0, suffix: str = ".mp3") -> None:
+    """Play audio data from bytes using system player.
+
+    This is a convenience function that saves audio bytes to a temporary
+    file and plays it using the system audio player.
+
+    Args:
+        audio_data: Audio data as bytes.
+        volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double).
+        suffix: File suffix for temporary file (default: .mp3).
+    """
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(audio_data)
+        tmp_path = Path(tmp.name)
+
+    try:
+        play_audio_with_player(tmp_path, volume)
+    finally:
+        # Clean up temp file
+        if tmp_path.exists():
+            tmp_path.unlink()

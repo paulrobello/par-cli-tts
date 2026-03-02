@@ -14,9 +14,9 @@ from typing import Any
 import platformdirs
 import yaml
 from elevenlabs.client import ElevenLabs
-from rich.console import Console
 
-console = Console()
+from src.console import console
+from src.utils import looks_like_voice_id
 
 CACHE_EXPIRY_DAYS = 7  # Cache expires after 7 days
 CACHE_CHECK_INTERVAL_HOURS = 24  # Check for changes every 24 hours
@@ -346,7 +346,7 @@ def resolve_voice_identifier(
         ValueError: If voice cannot be resolved.
     """
     # If it looks like a voice ID (20+ character alphanumeric), return as-is
-    if len(identifier) >= 20 and identifier.replace("_", "").isalnum():
+    if looks_like_voice_id(identifier):
         return identifier
 
     # Try to resolve from cache first

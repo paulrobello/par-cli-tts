@@ -6,10 +6,9 @@ import urllib.request
 from pathlib import Path
 
 from platformdirs import user_data_dir
-from rich.console import Console
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 
-console = Console()
+from src.console import console
 
 
 class ModelDownloader:

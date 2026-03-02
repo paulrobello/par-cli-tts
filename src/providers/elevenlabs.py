@@ -5,18 +5,15 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality", category=UserWarning)
     from elevenlabs import VoiceSettings, play, save
     from elevenlabs.client import ElevenLabs
-from rich.console import Console
 
+from src.defaults import DEFAULT_ELEVENLABS_VOICE
+from src.http_client import create_http_client
 from src.providers.base import TTSProvider, Voice
 from src.voice_cache import VoiceCache, resolve_voice_identifier
-
-console = Console()
 
 
 class ElevenLabsProvider(TTSProvider):
@@ -31,8 +28,8 @@ class ElevenLabsProvider(TTSProvider):
             **kwargs: Additional configuration.
         """
         super().__init__(api_key, **kwargs)
-        # Create httpx client with SSL verification disabled
-        http_client = httpx.Client(verify=False, timeout=kwargs.get("timeout", 10.0))
+        # Create httpx client with standard configuration
+        http_client = create_http_client(timeout=kwargs.get("timeout", 10.0))
         self.client = ElevenLabs(api_key=api_key, httpx_client=http_client)
         self.cache = VoiceCache(app_name="par-tts-elevenlabs")
 
@@ -54,7 +51,7 @@ class ElevenLabsProvider(TTSProvider):
     @property
     def default_voice(self) -> str:
         """Default voice for this provider."""
-        return "aMSt68OGf4xUZAnLpTU8"
+        return DEFAULT_ELEVENLABS_VOICE
 
     def generate_speech(
         self,

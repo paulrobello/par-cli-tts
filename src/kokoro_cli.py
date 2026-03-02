@@ -5,12 +5,11 @@ import sys
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
+from src.console import console
 from src.model_downloader import ModelDownloader
 
-console: Console = Console()
 app = typer.Typer(help="Manage Kokoro ONNX TTS models")
 
 

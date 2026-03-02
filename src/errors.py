@@ -4,9 +4,7 @@ import sys
 from enum import Enum
 from typing import NoReturn
 
-from rich.console import Console
-
-console = Console(stderr=True)
+from src.console import error_console as console
 
 
 class ErrorType(Enum):

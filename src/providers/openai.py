@@ -1,17 +1,16 @@
 """OpenAI TTS provider implementation."""
 
-import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
-import httpx
 from openai import OpenAI
-from rich.console import Console
 
+from src.console import console
+from src.defaults import DEFAULT_OPENAI_VOICE
+from src.http_client import create_http_client
 from src.providers.base import TTSProvider, Voice
-
-console = Console()
+from src.utils import play_audio_bytes
 
 
 class OpenAIProvider(TTSProvider):
@@ -36,8 +35,8 @@ class OpenAIProvider(TTSProvider):
             **kwargs: Additional configuration.
         """
         super().__init__(api_key, **kwargs)
-        # Create httpx client with SSL verification disabled
-        http_client = httpx.Client(verify=False, timeout=kwargs.get("timeout", 10.0))
+        # Create httpx client with standard configuration
+        http_client = create_http_client(timeout=kwargs.get("timeout", 10.0))
         self.client = OpenAI(api_key=api_key, http_client=http_client)
 
     @property
@@ -58,7 +57,7 @@ class OpenAIProvider(TTSProvider):
     @property
     def default_voice(self) -> str:
         """Default voice for this provider."""
-        return "nova"
+        return DEFAULT_OPENAI_VOICE
 
     def generate_speech(
         self,
@@ -177,45 +176,8 @@ class OpenAIProvider(TTSProvider):
             audio_data: Audio data to play (bytes or iterator).
             volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
         """
-        # OpenAI doesn't provide a play function, so we'll use a temporary file
-        # and system audio player
-        import subprocess
-        import sys
-
         # Convert iterator to bytes if needed
         if not isinstance(audio_data, bytes):
             audio_data = b"".join(audio_data)
 
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-            tmp.write(audio_data)
-            tmp_path = tmp.name
-
-        try:
-            # Determine the appropriate command based on the platform
-            if sys.platform == "darwin":  # macOS
-                # afplay supports volume flag (-v)
-                subprocess.run(["afplay", "-v", str(volume), tmp_path], check=True)
-            elif sys.platform == "win32":  # Windows
-                # Windows doesn't have native volume control for start command
-                subprocess.run(["start", "", tmp_path], shell=True, check=True)
-            else:  # Linux and others
-                # Try common audio players with volume support
-                players_with_volume = [
-                    ("paplay", ["--volume", str(int(volume * 65536))]),  # paplay uses 0-65536
-                    ("ffplay", ["-volume", str(int(volume * 100)), "-nodisp", "-autoexit"]),  # ffplay uses 0-100
-                    ("mpg123", ["-f", str(int(volume * 32768))]),  # mpg123 uses scale factor
-                    ("aplay", []),  # aplay doesn't support volume directly
-                ]
-
-                for player, volume_args in players_with_volume:
-                    try:
-                        cmd = [player] + volume_args + [tmp_path]
-                        subprocess.run(cmd, check=True)
-                        break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
-                        continue
-                else:
-                    console.print("[yellow]Warning: Could not find audio player. Audio saved but not played.[/yellow]")
-        finally:
-            # Clean up temp file
-            Path(tmp_path).unlink(missing_ok=True)
+        play_audio_bytes(audio_data, volume=volume, suffix=".mp3")

@@ -6,9 +6,8 @@ from typing import Any
 import platformdirs
 import yaml
 from pydantic import BaseModel, Field, ValidationError
-from rich.console import Console
 
-console = Console()
+from src.console import console
 
 
 class ConfigFile(BaseModel):

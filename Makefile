@@ -108,8 +108,16 @@ typecheck:			# Perform static type checks with pyright
 typecheck-stats:			# Perform static type checks with pyright and print stats
 	$(pyright) --stats
 
+.PHONY: test
+test:				# Run tests with pytest
+	$(run) pytest tests/ -v
+
+.PHONY: test-cov
+test-cov:			# Run tests with coverage report
+	$(run) pytest tests/ -v --cov=src --cov-report=term-missing
+
 .PHONY: checkall
-checkall: format lint typecheck 	        # Check all the things
+checkall: format lint typecheck test	# Check all the things
 
 .PHONY: pre-commit	        # run pre-commit checks on all files
 pre-commit:
