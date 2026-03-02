@@ -178,6 +178,7 @@ The project uses centralized error handling (`src/errors.py`):
 ### Configuration File
 Settings can be defined in `~/.config/par-tts/config.yaml`:
 - Provider defaults: `provider`, `voice`, `model`
+- API keys: `elevenlabs_api_key`, `openai_api_key` (optional, can also use env vars)
 - Output settings: `output_dir`, `output_format`, `keep_temp`, `temp_dir`
 - Audio settings: `volume`, `speed`
 - Provider-specific: `stability`, `similarity_boost`, `lang`

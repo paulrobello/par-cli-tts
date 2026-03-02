@@ -400,6 +400,10 @@ provider: kokoro-onnx
 # Default voice
 voice: Rachel
 
+# API keys (optional - can also be set via environment variables)
+# elevenlabs_api_key: your-elevenlabs-api-key-here
+# openai_api_key: your-openai-api-key-here
+
 # Output settings
 output_dir: ~/Documents/audio
 keep_temp: false
