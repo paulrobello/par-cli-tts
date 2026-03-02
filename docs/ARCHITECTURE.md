@@ -819,15 +819,15 @@ graph TD
 |----------|-------------|---------|----------|
 | `ELEVENLABS_API_KEY` | ElevenLabs API authentication | - | Yes* |
 | `OPENAI_API_KEY` | OpenAI API authentication | - | Yes* |
-| `KOKORO_MODEL_PATH` | Path to Kokoro ONNX model file | `kokoro-v1.0.onnx` | No |
-| `KOKORO_VOICE_PATH` | Path to Kokoro voice embeddings | `voices-v1.0.bin` | No |
-| `TTS_PROVIDER` | Default TTS provider | `elevenlabs` | No |
+| `KOKORO_MODEL_PATH` | Path to Kokoro ONNX model file | Auto-download | No |
+| `KOKORO_VOICE_PATH` | Path to Kokoro voice embeddings | Auto-download | No |
+| `TTS_PROVIDER` | Default TTS provider | `kokoro-onnx` | No |
 | `TTS_VOICE_ID` | Default voice (overrides provider-specific) | - | No |
-| `ELEVENLABS_VOICE_ID` | Default ElevenLabs voice | `aMSt68OGf4xUZAnLpTU8` | No |
+| `ELEVENLABS_VOICE_ID` | Default ElevenLabs voice | `Juniper` | No |
 | `OPENAI_VOICE_ID` | Default OpenAI voice | `nova` | No |
 | `KOKORO_VOICE_ID` | Default Kokoro ONNX voice | `af_sarah` | No |
 
-*At least one API key is required for cloud providers
+*At least one API key is required for cloud providers (Kokoro ONNX works offline without API keys)
 
 ## Build and Deployment Architecture
 
@@ -1000,7 +1000,7 @@ from src.providers.base import TTSProvider, Voice
 class NewProvider(TTSProvider):
     """New TTS provider implementation."""
 
-    def __init__(self, api_key: str, **kwargs: Any):
+    def __init__(self, api_key: str | None = None, **kwargs: Any):
         super().__init__(api_key, **kwargs)
         # Initialize provider-specific client
 
@@ -1021,7 +1021,7 @@ class NewProvider(TTSProvider):
         return "default-voice-id"
 
     def generate_speech(self, text: str, voice: str,
-                       model: str | None = None, **kwargs: Any) -> bytes:
+                       model: str | None = None, **kwargs: Any) -> bytes | Iterator[bytes]:
         # Implementation
         pass
 
@@ -1033,11 +1033,11 @@ class NewProvider(TTSProvider):
         # Implementation
         pass
 
-    def save_audio(self, audio_data: bytes, file_path: str | Path) -> None:
+    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
         # Implementation
         pass
 
-    def play_audio(self, audio_data: bytes) -> None:
+    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
         # Implementation
         pass
 ```
@@ -1182,14 +1182,14 @@ graph TB
     end
 
     subgraph "Memory Optimization"
-        STREAM[Iterator[bytes] Streaming]
+        STREAM["Iterator[bytes] Streaming"]
         DIRECT[Direct File Writing]
         CHUNK[Chunk Processing]
     end
 
     subgraph "API Optimization"
         BATCH[Batch Requests]
-        STREAM[Streaming Responses]
+        APISTREAM[Streaming Responses]
         TIMEOUT[Request Timeouts<br/>10 seconds]
         RETRY[Smart Retry Logic]
     end
@@ -1210,7 +1210,7 @@ graph TB
     FC --> PERF
 
     BATCH --> PERF
-    STREAM --> PERF
+    APISTREAM --> PERF
     TIMEOUT --> PERF
     RETRY --> PERF
 
@@ -1402,3 +1402,10 @@ Key architectural achievements:
 - **Extensibility**: New providers can be added with minimal code changes
 
 This architecture positions PAR CLI TTS for future growth while maintaining stability and performance for current users.
+
+## Related Documentation
+
+- [README.md](../README.md) - Project overview and installation guide
+- [CLAUDE.md](../CLAUDE.md) - Development guide and code conventions
+- [DOCUMENTATION_STYLE_GUIDE.md](DOCUMENTATION_STYLE_GUIDE.md) - Documentation standards for this project
+- [pyproject.toml](../pyproject.toml) - Project configuration and dependencies
