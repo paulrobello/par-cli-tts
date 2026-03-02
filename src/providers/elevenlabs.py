@@ -7,8 +7,9 @@ from typing import Any
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality", category=UserWarning)
-    from elevenlabs import VoiceSettings, play, save
+    from elevenlabs import VoiceSettings
     from elevenlabs.client import ElevenLabs
+    from elevenlabs.play import play, save
 
 from src.defaults import DEFAULT_ELEVENLABS_VOICE
 from src.http_client import create_http_client

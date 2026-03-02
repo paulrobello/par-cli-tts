@@ -28,48 +28,60 @@ from src.providers import PROVIDERS, TTSProvider
 app = typer.Typer(help="Text-to-speech command line tool with multiple provider support")
 
 
-def get_api_key(provider: str) -> str | None:
+def get_api_key(provider: str, config_file: Any = None) -> str | None:
     """
-    Get API key for the specified provider from environment.
+    Get API key for the specified provider from config file or environment.
 
     Args:
         provider: Provider name (elevenlabs, openai, kokoro-onnx).
+        config_file: Optional config file with API keys.
 
     Returns:
         API key string or None for providers that don't need one.
 
     Raises:
-        SystemExit: If API key is not found in environment.
+        SystemExit: If API key is not found anywhere.
     """
     # kokoro-onnx doesn't need an API key
     if provider == "kokoro-onnx":
         return None
 
-    env_var_map = {
-        "elevenlabs": "ELEVENLABS_API_KEY",
-        "openai": "OPENAI_API_KEY",
+    # Map provider to config file field and environment variable
+    key_map = {
+        "elevenlabs": ("elevenlabs_api_key", "ELEVENLABS_API_KEY"),
+        "openai": ("openai_api_key", "OPENAI_API_KEY"),
     }
 
-    env_var = env_var_map.get(provider)
-    if not env_var:
+    if provider not in key_map:
         handle_error(f"Unknown provider '{provider}'", ErrorType.INVALID_PROVIDER)
         return None  # For type checker, never reached
 
+    config_field, env_var = key_map[provider]
+
+    # Check config file first
+    if config_file:
+        api_key = getattr(config_file, config_field, None)
+        if api_key:
+            return api_key
+
+    # Fall back to environment variable
     api_key = os.getenv(env_var)
-    if not api_key and provider != "kokoro-onnx":
+    if not api_key:
         handle_error(
-            f"{env_var} not found. Please set {env_var} in your .env file or environment", ErrorType.MISSING_API_KEY
+            f"{env_var} not found. Please set {env_var} in your config file or environment",
+            ErrorType.MISSING_API_KEY,
         )
 
     return api_key
 
 
-def create_provider(provider_name: str, **kwargs: Any) -> TTSProvider:
+def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) -> TTSProvider:
     """
     Create a TTS provider instance.
 
     Args:
         provider_name: Name of the provider.
+        config_file: Optional config file with API keys.
         **kwargs: Additional provider configuration.
 
     Returns:
@@ -83,7 +95,7 @@ def create_provider(provider_name: str, **kwargs: Any) -> TTSProvider:
             f"Unknown provider '{provider_name}'. Available: {', '.join(PROVIDERS.keys())}", ErrorType.INVALID_PROVIDER
         )
 
-    api_key = get_api_key(provider_name)
+    api_key = get_api_key(provider_name, config_file)
     validate_api_key(api_key, provider_name)
     provider_class = PROVIDERS[provider_name]
 
@@ -543,14 +555,14 @@ def main(
         str | None, typer.Argument(help="Text to convert to speech. Use '-' for stdin, '@filename' to read from file")
     ] = None,
     provider: Annotated[
-        str,
+        str | None,
         typer.Option(
             "-P",
             "--provider",
             help="TTS provider to use (elevenlabs, openai, kokoro-onnx)",
             envvar="TTS_PROVIDER",
         ),
-    ] = DEFAULT_PROVIDER,
+    ] = None,
     voice: Annotated[
         str | None,
         typer.Option(
@@ -754,7 +766,7 @@ def main(
 
     # Apply config file defaults (CLI args override these)
     if config_file:
-        provider = provider or config_file.provider or DEFAULT_PROVIDER
+        provider = provider or config_file.provider
         voice = voice or config_file.voice
         model = model or config_file.model
         output = output or (Path(config_file.output_dir) / "output.mp3" if config_file.output_dir else None)
@@ -770,6 +782,10 @@ def main(
             play_audio if play_audio else config_file.play_audio if config_file.play_audio is not None else True
         )
         debug = debug or config_file.debug or False
+
+    # Apply default provider if still not set
+    if not provider:
+        provider = DEFAULT_PROVIDER
 
     # Store debug mode globally for error handler
     sys._debug_mode = debug  # type: ignore
@@ -794,7 +810,7 @@ def main(
         return
 
     # Create provider
-    tts_provider = create_provider(provider)
+    tts_provider = create_provider(provider, config_file)
 
     # Handle cache management operations (ElevenLabs only)
     if refresh_cache or clear_cache_samples:

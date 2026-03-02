@@ -18,6 +18,10 @@ class ConfigFile(BaseModel):
     voice: str | None = Field(None, description="Default voice")
     model: str | None = Field(None, description="Default model")
 
+    # API keys (optional - can also be set via environment variables)
+    elevenlabs_api_key: str | None = Field(None, description="ElevenLabs API key")
+    openai_api_key: str | None = Field(None, description="OpenAI API key")
+
     # Output settings
     output_dir: str | None = Field(None, description="Default output directory")
     output_format: str | None = Field(None, description="Default output format")
@@ -101,6 +105,10 @@ class ConfigManager:
             "",
             "# Default model",
             "# model: eleven_monolingual_v1",
+            "",
+            "# API keys (optional - can also be set via environment variables)",
+            "# elevenlabs_api_key: your-elevenlabs-api-key-here",
+            "# openai_api_key: your-openai-api-key-here",
             "",
             "# Output settings",
             "# output_dir: ~/Documents/audio",
