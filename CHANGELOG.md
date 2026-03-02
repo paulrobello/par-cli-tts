@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-03-02
+
+### Fixed
+
+- **Config file provider setting** - Provider from config file now correctly overrides default
+  - CLI was defaulting to `kokoro-onnx` instead of reading `provider` from config
+  - Fixed by changing CLI default from `DEFAULT_PROVIDER` to `None`
+
+- **API keys in config file** - API keys can now be stored in config file
+  - Added `elevenlabs_api_key` and `openai_api_key` fields to config schema
+  - Config file takes precedence over environment variables
+
+- **ElevenLabs audio playback** - Fixed volume control and iterator consumption
+  - Replaced SDK's `play()` with system player for volume support
+  - Fixed import path for `play`/`save` (moved to `elevenlabs.play` submodule)
+  - Fixed iterator being consumed by `save_audio()` before `play_audio()`
+
 ## [0.4.1] - 2025-03-02
 
 ### Added
