@@ -43,7 +43,7 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 - **Smarter Voice Cache** - Change detection, manual refresh, and voice sample caching
 - **Consistent Error Handling** - Clear error messages with proper exit codes
 - **Multiple Input Methods** - Direct text, stdin piping, and file input (`@filename`)
-- **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- **Volume Control** - Adjust playback volume (0.0 to 5.0) across all platforms (macOS, Linux, Windows)
 - **Voice Preview** - Test voices with sample text before using
 
 ### Improvements
@@ -59,7 +59,7 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 - **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
 - **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
 - **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
-- **Volume Control** - Adjust playback volume (0.0 to 5.0) with platform-specific support
+- **Volume Control** - Adjust playback volume (0.0 to 5.0) across all platforms (macOS, Linux, Windows)
 - **Voice Preview** - Test voices with sample text using `--preview-voice`
 - **Smart Voice Caching** - Change detection, auto-refresh, and voice sample caching
 - **Partial Name Matching** - Type "char" to match "Charlotte" (ElevenLabs)
@@ -99,6 +99,43 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```bash
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
+
+### Windows Audio Requirements
+
+For the best audio playback experience on Windows with volume control, install one of these audio players:
+
+#### ffplay (Recommended)
+```powershell
+# Using Chocolatey
+choco install ffmpeg
+
+# Using Scoop
+scoop install ffmpeg
+
+# Using winget
+winget install ffmpeg
+```
+
+#### VLC Media Player (Alternative)
+Download from [videolan.org](https://www.videolan.org/vlc/) or:
+```powershell
+# Using Chocolatey
+choco install vlc
+
+# Using winget
+winget install VideoLAN.VLC
+```
+
+#### mpg123 (Lightweight Option)
+```powershell
+# Using Chocolatey
+choco install mpg123
+
+# Using Scoop
+scoop install mpg123
+```
+
+**Note**: If no external player is installed, PAR CLI TTS will use Windows PowerShell's built-in MediaPlayer COM object as a fallback. This provides basic playback with volume control (capped at 1.0/100%). For full volume control up to 5.0x, install ffplay, VLC, or mpg123.
 
 ## Installation
 
@@ -676,6 +713,8 @@ par-cli-tts/
    - Check system volume settings
    - Try adjusting `--volume` flag
    - On Linux, verify audio subsystem (ALSA/PulseAudio) is working
+   - On Windows, install ffplay (`choco install ffmpeg`) for best results
+   - On Windows without external players, the PowerShell fallback will be used
 
 6. **Slow Response Times**
    - Voice previews are cached after first use

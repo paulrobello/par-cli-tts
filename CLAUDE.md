@@ -44,7 +44,7 @@ make clear-cache   # Clear cached voice data
 # Kokoro ONNX model management
 make kokoro-download  # Download Kokoro models
 make kokoro-info      # Show model information
-make kokoro-clear     # Clear Kokoro models
+make kokoro-clear     # Clear Kokoro models (also: par-tts --clear-kokoro-models)
 make kokoro-path      # Show model paths
 ```
 
@@ -225,7 +225,7 @@ The project uses strict type checking with pyright. Key patterns:
 All providers support volume control (0.0-5.0 range):
 - macOS: Full support via `afplay -v`
 - Linux: Support via `paplay`, `ffplay`, `mpg123`
-- Windows: System volume only
+- Windows: Full support via ffplay, VLC, mpg123, or PowerShell MediaPlayer fallback
 - ElevenLabs: Uses built-in player (no volume control)
 
 ### Memory-Efficient Streaming
@@ -264,8 +264,14 @@ When testing provider implementations:
 
 ### Audio Playback Issues
 - macOS: Uses `afplay`
-- Windows: Uses `start` command
+- Windows: Uses ffplay (recommended), VLC, mpg123, or PowerShell MediaPlayer fallback
 - Linux: Tries `aplay`, `paplay`, `ffplay`, `mpg123` in order
+
+### Windows Audio Support
+- **Recommended**: Install ffplay via `choco install ffmpeg`
+- **Alternative players**: VLC, mpg123
+- **Fallback**: PowerShell MediaPlayer COM object (built-in, no external dependency)
+- All methods support volume control (PowerShell caps at 1.0)
 
 ### Slow First Run
 - ElevenLabs fetches and caches voice list (7-day expiry)
