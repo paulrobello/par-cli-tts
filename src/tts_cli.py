@@ -489,7 +489,10 @@ def handle_speech_generation(
 
             if play_audio:
                 console.print("[cyan]Playing audio...[/cyan]")
-                tts_provider.play_audio(audio_data, volume=volume)
+                # Read from saved file since iterator was consumed
+                with open(output_path, "rb") as f:
+                    audio_bytes = f.read()
+                tts_provider.play_audio(audio_bytes, volume=volume)
         else:
             if play_audio:
                 console.print("[cyan]Playing audio...[/cyan]")
@@ -508,7 +511,10 @@ def handle_speech_generation(
                 tts_provider.save_audio(audio_data, tmp_path)
 
                 try:
-                    tts_provider.play_audio(audio_data, volume=volume)
+                    # Read from saved file since iterator was consumed
+                    with open(tmp_path, "rb") as f:
+                        audio_bytes = f.read()
+                    tts_provider.play_audio(audio_bytes, volume=volume)
 
                     if keep_temp or temp_dir:
                         console.print(f"[green]Audio saved to: {tmp_path}[/green]")

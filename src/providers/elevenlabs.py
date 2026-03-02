@@ -9,11 +9,12 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality", category=UserWarning)
     from elevenlabs import VoiceSettings
     from elevenlabs.client import ElevenLabs
-    from elevenlabs.play import play, save
+    from elevenlabs.play import save
 
 from src.defaults import DEFAULT_ELEVENLABS_VOICE
 from src.http_client import create_http_client
 from src.providers.base import TTSProvider, Voice
+from src.utils import play_audio_bytes
 from src.voice_cache import VoiceCache, resolve_voice_identifier
 
 
@@ -153,20 +154,14 @@ class ElevenLabsProvider(TTSProvider):
 
     def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
         """
-        Play audio data.
+        Play audio data with volume control.
 
         Args:
             audio_data: Audio data to play.
             volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
-                   Note: ElevenLabs play() doesn't support volume, will use system default.
         """
-        # For play, we need to convert iterator to bytes
-        if isinstance(audio_data, bytes):
-            play(audio_data)
-        else:
-            # Convert iterator to bytes for playback
-            audio_bytes = b"".join(audio_data)
-            play(audio_bytes)
+        # Convert iterator to bytes if needed
+        if not isinstance(audio_data, bytes):
+            audio_data = b"".join(audio_data)
 
-        # Note: ElevenLabs play() function doesn't support volume control
-        # Consider using system players with volume support if needed
+        play_audio_bytes(audio_data, volume=volume, suffix=".mp3")
