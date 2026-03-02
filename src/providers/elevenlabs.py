@@ -1,12 +1,16 @@
 """ElevenLabs TTS provider implementation."""
 
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import httpx
-from elevenlabs import VoiceSettings, play, save
-from elevenlabs.client import ElevenLabs
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality", category=UserWarning)
+    from elevenlabs import VoiceSettings, play, save
+    from elevenlabs.client import ElevenLabs
 from rich.console import Console
 
 from src.providers.base import TTSProvider, Voice
