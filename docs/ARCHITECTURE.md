@@ -1,5 +1,7 @@
 # PAR CLI TTS Architecture Documentation
 
+This document provides a comprehensive overview of the PAR CLI TTS system architecture, including component design, data flow, provider abstraction patterns, and extension points for adding new TTS providers.
+
 ## Table of Contents
 
 1. [System Overview](#system-overview)
@@ -23,6 +25,7 @@ PAR CLI TTS is a command-line text-to-speech tool that provides a unified interf
 graph TB
     subgraph "User Interface Layer"
         CLI[CLI Interface<br/>tts_cli.py]
+        KCLI[Kokoro CLI<br/>kokoro_cli.py]
         ENV[Environment Variables<br/>.env]
         CONF[Config File<br/>~/.config/par-tts/config.yaml]
     end
@@ -34,6 +37,9 @@ graph TB
         CFG[Configuration Manager<br/>config_file.py]
         ERR[Error Handler<br/>errors.py]
         UTIL[Utilities<br/>utils.py]
+        CONS[Console<br/>console.py]
+        HTTP[HTTP Client<br/>http_client.py]
+        DFLT[Defaults<br/>defaults.py]
     end
 
     subgraph "Provider Abstraction Layer"
@@ -60,17 +66,23 @@ graph TB
     CLI --> PM
     CLI --> CFG
     CLI --> ERR
+    CLI --> CONS
+    KCLI --> MD
+    KCLI --> CONS
     ENV --> CFG
     CONF --> CFG
     PM --> BASE
     PM --> UTIL
+    PM --> DFLT
     BASE --> EL
     BASE --> OA
     BASE --> KO
     BASE --> FP
     EL --> VC
     EL --> ELAPI
+    EL --> HTTP
     OA --> OAAPI
+    OA --> HTTP
     KO --> MD
     KO --> ONNX
     FP --> FAPI
@@ -79,8 +91,10 @@ graph TB
     EL --> AUDIO
     OA --> AUDIO
     KO --> AUDIO
+    ERR --> CONS
 
     style CLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style KCLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style ENV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style PM fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -89,6 +103,9 @@ graph TB
     style CFG fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style ERR fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style UTIL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style CONS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style HTTP fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style DFLT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style BASE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style EL fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style OA fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
@@ -111,6 +128,8 @@ graph TB
 4. **Environment-First Configuration**: Uses environment variables for sensitive data
 5. **Type-Safe**: Comprehensive type hints throughout the codebase
 6. **User-Friendly**: Rich CLI output with helpful error messages
+7. **Cross-Platform**: Full support for macOS, Linux, and Windows with volume control
+8. **Offline-First**: Kokoro ONNX as default provider for zero-latency offline usage
 
 ## Component Architecture
 
@@ -146,21 +165,28 @@ Abstract base class defining the provider interface:
 - Advanced voice settings (stability, similarity boost)
 - Streaming audio generation (Iterator[bytes])
 - Voice sample caching for offline preview
+- Default model: eleven_multilingual_v2
+- Default voice: Juniper
+- Supported formats: mp3, pcm, ulaw
 
 **OpenAI Provider (`src/providers/openai.py`)**
-- Multiple audio formats
-- Variable speech speed
-- Simple voice selection
-- Streaming support
+- Multiple audio formats (mp3, opus, aac, flac, wav, pcm)
+- Variable speech speed (0.25 to 4.0)
+- 13 voice options (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar)
+- gpt-4o-mini-tts model with voice instructions support
+- Simple voice selection with case-insensitive matching
+- Default model: gpt-4o-mini-tts
+- Default voice: nova
 
 **Kokoro ONNX Provider (`src/providers/kokoro_onnx.py`)**
-- Offline TTS using ONNX Runtime
+- Offline TTS using ONNX Runtime (no API key required)
 - Automatic model downloading with SHA256 verification
-- XDG-compliant model storage
-- Multiple voice styles
-- Language support with phoneme synthesis
-- Speed control
-- No API key required
+- XDG-compliant model storage (~106 MB download)
+- Multiple voice styles with language support
+- Speed control (default: 1.0)
+- Language code support (default: en-us)
+- Multiple output formats (wav, flac, ogg)
+- Default voice: af_sarah
 
 #### 4. Voice Cache System (`src/voice_cache.py`)
 
@@ -187,36 +213,76 @@ Automatic model management for offline providers:
 
 Common utilities for the application:
 - `stream_to_file()`: Memory-efficient streaming
-- `sanitize_debug_output()`: API key masking
+- `write_with_stream()`: Write audio stream to open file handle
+- `sanitize_debug_output()`: API key masking for debug output
 - `verify_file_checksum()`: SHA256 verification
 - `calculate_file_checksum()`: Checksum generation
+- `looks_like_voice_id()`: Detect if string is a voice ID vs name
+- `play_audio_with_player()`: Cross-platform audio playback with volume
+- `_find_windows_audio_player()`: Detect available Windows audio player
+- `_play_with_powershell()`: Windows PowerShell MediaPlayer fallback
+- `_play_audio_windows()`: Windows-specific audio playback
+- `play_audio_bytes()`: Play audio from bytes using system player
 
-#### 7. Configuration Classes (`src/config.py`)
-
-Structured configuration management:
-- `AudioSettings`: Format and audio parameters
-- `OutputSettings`: File and playback options
-- `ProviderSettings`: Provider-specific settings
-- `TTSConfig`: Complete configuration object
-
-#### 8. Configuration File Manager (`src/config_file.py`)
+#### 7. Configuration File Manager (`src/config_file.py`)
 
 YAML-based configuration file support:
-- `ConfigFile`: Pydantic model for config structure
+- `ConfigFile`: Pydantic model for config structure with validation
 - `ConfigManager`: Load, validate, and merge configurations
 - XDG-compliant config location (~/.config/par-tts/config.yaml)
 - Sample config generation (--create-config)
 - CLI argument precedence over config file
+- Configuration schema validation with Pydantic
 
-#### 9. Error Handling Module (`src/errors.py`)
+#### 8. Error Handling Module (`src/errors.py`)
 
 Centralized error management:
-- `ErrorType`: Enum for categorized exit codes
+- `ErrorType`: Enum for categorized exit codes (User: 1, System: 2, File: 3, Config: 4)
+- `TTSError`: Base exception class for TTS-specific errors
 - `handle_error()`: Consistent error reporting with Rich console
-- `validate_api_key()`: API key validation
-- `validate_file_path()`: File path validation
+- `validate_api_key()`: API key validation for cloud providers
+- `validate_file_path()`: File path validation with security checks
+- `wrap_provider_error()`: Decorator for consistent provider error handling
 - Debug mode support with detailed stack traces
-- Categorized error types (AUTH, NETWORK, VOICE, FILE, etc.)
+
+#### 9. Default Values (`src/defaults.py`)
+
+Centralized default configuration values:
+- `DEFAULT_PROVIDER`: kokoro-onnx
+- `DEFAULT_ELEVENLABS_VOICE`: Juniper
+- `DEFAULT_OPENAI_VOICE`: nova
+- `DEFAULT_KOKORO_VOICE`: af_sarah
+- `get_default_voice()`: Get default voice for a provider (checks env vars first)
+
+#### 10. Configuration Dataclasses (`src/config.py`)
+
+Structured configuration dataclasses for internal use:
+- `AudioSettings`: Format, speed, stability, similarity, lang settings
+- `OutputSettings`: Output path, play audio, keep temp, temp dir, debug flags
+- `ProviderSettings`: Provider name, voice, model, API key
+- `TTSConfig`: Complete configuration combining all settings
+- `get_provider_kwargs()`: Extract provider-specific kwargs from config
+
+#### 11. Console Output (`src/console.py`)
+
+Shared console instances for consistent output:
+- `console`: Standard output Console instance (stdout)
+- `error_console`: Error output Console instance (stderr)
+
+#### 12. HTTP Client Factory (`src/http_client.py`)
+
+HTTP client creation with consistent configuration:
+- `create_http_client()`: Factory function for httpx.Client
+- Configurable timeout (default: 10 seconds)
+- SSL verification options
+
+#### 13. Kokoro Model CLI (`src/kokoro_cli.py`)
+
+Dedicated CLI for Kokoro ONNX model management:
+- `download`: Download model files with --force option
+- `info`: Show model information and status
+- `clear`: Remove downloaded models with confirmation
+- `path`: Display model storage paths
 
 ### Component Interaction Diagram
 
@@ -314,7 +380,7 @@ classDiagram
     class OpenAIProvider {
         +client: OpenAI
         +VOICES: dict
-        +generate_speech(text, voice, model, response_format, speed)
+        +generate_speech(text, voice, model, response_format, speed, instructions)
         +list_voices()
         +resolve_voice(identifier)
     }
@@ -1364,7 +1430,17 @@ gantt
     CDN Integration         :2024-10-15, 20d
 ```
 
-### Recent Improvements (v0.2.0)
+### Recent Improvements
+
+#### v0.4.0
+
+1. **Full Windows Support**: Complete Windows compatibility with volume control
+2. **OpenAI gpt-4o-mini-tts**: New default model with voice instructions support
+3. **Extended Voice Selection**: OpenAI now supports 13 voices including ballad, verse, marin, cedar
+4. **Voice Instructions**: OpenAI gpt-4o-mini-tts supports style instructions (e.g., "Speak in a cheerful tone")
+5. **Kokoro Default Provider**: kokoro-onnx is now the default provider for offline-first usage
+
+#### v0.2.0
 
 1. **Configuration File Support**: YAML-based config at ~/.config/par-tts/config.yaml
 2. **Consistent Error Handling**: ErrorType enum with categorized exit codes

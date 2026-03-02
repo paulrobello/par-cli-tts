@@ -269,3 +269,4 @@ junit.xml
 # Documentation builds
 docs/_build/
 docs/.doctrees/
+settings.local.json

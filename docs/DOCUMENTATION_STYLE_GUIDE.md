@@ -1,6 +1,6 @@
 # Documentation Style Guide
 
-This guide establishes standards and best practices for creating and maintaining documentation in the PAR CC RT Dashboard project. It ensures consistency, clarity, and professionalism across all technical documentation.
+This guide establishes standards and best practices for creating and maintaining documentation in the Par Terminal Emulator project. It ensures consistency, clarity, and professionalism across all technical documentation.
 
 ## Table of Contents
 - [Quick Reference](#quick-reference)
@@ -23,6 +23,8 @@ This guide establishes standards and best practices for creating and maintaining
 - **Specify language** in all code blocks
 - **Test all examples** before documenting
 - **Update cross-references** when modifying content
+- **Never use line numbers** in file references - They're brittle and hard to maintain
+- **Do not store package versions** in documentation - Version numbers are brittle and difficult to maintain
 
 ## Document Structure
 
@@ -218,6 +220,57 @@ graph TD
 - Classes: `WebSocketProvider`
 - Variables: `DASHBOARD_SERVER_URL`
 - Ports: `port 8080`
+
+#### File References
+
+**IMPORTANT**: When referencing files in documentation, **DO NOT include line numbers**. Line numbers are brittle and difficult to maintain as code changes.
+
+**Good examples:**
+- "The `Terminal` class in `src/terminal.rs`"
+- "See the implementation in `src/python_bindings/terminal.rs`"
+- "The `export_text()` method in `Terminal`"
+
+**Bad examples:**
+- ❌ "See `src/terminal.rs:816`" - line numbers change with code edits
+- ❌ "Located at `/Users/probello/Repos/par-term-emu-rust/Cargo.toml:3`" - overly specific and fragile
+- ❌ "The fix is in `terminal.rs` lines 100-150" - ranges become outdated quickly
+
+**Exception**: Line numbers may be included in:
+- Temporary debugging notes (marked clearly as temporary)
+- Issue reports with specific commit SHA references
+- Code review comments (ephemeral by nature)
+
+#### Package Versions
+
+**IMPORTANT**: Do not store package version numbers in documentation. Versions are brittle and difficult to maintain as dependencies are updated.
+
+**Good examples:**
+- "Requires Python 3.12+" - minimum version requirement only
+- "Uses Textual framework for the TUI"
+- "Built with par-term-emu-core-rust (Rust backend)"
+- "Dependencies managed via pyproject.toml"
+
+**Bad examples:**
+- ❌ "Textual 6.6.0+" - specific version that will become outdated
+- ❌ "PyYAML 6.0.3 for configuration" - unnecessarily specific
+- ❌ "par-term-emu-core-rust 0.4.0 or later" - maintenance burden
+
+**Why avoid version numbers:**
+- Dependencies update frequently
+- Documentation becomes stale and misleading
+- Creates maintenance burden across all docs
+- Version requirements are already defined in package manifests (pyproject.toml, requirements.txt, etc.)
+- Users should reference the canonical source (package files) for version info
+
+**Where versions ARE appropriate:**
+- Release notes and changelogs
+- Migration guides (e.g., "Upgrading from v1.x to v2.x")
+- Troubleshooting specific version-related bugs
+- Package manifest files (pyproject.toml, requirements.txt)
+
+**Best practice**: Reference the package manifest location instead:
+- "See `pyproject.toml` for current dependency versions"
+- "Minimum Python version specified in `pyproject.toml`"
 
 #### Callout Boxes
 
@@ -571,6 +624,8 @@ docs/
 ```
 
 ### File Naming Conventions
+
+File name should be uppercase with lowercase extension.
 
 | Type | Pattern | Example | Description |
 |------|---------|---------|-------------|

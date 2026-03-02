@@ -49,7 +49,7 @@ kokoro-info:		# Show Kokoro model information
 
 .PHONY: kokoro-clear
 kokoro-clear:		# Clear Kokoro ONNX models
-	$(run) par-tts-kokoro clear --yes
+	$(run) par-tts --clear-kokoro-models
 
 .PHONY: kokoro-path
 kokoro-path:		# Show Kokoro model paths
