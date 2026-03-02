@@ -232,6 +232,38 @@ export KOKORO_VOICE_PATH=/path/to/voices-v1.0.bin
 
 When these environment variables are set, automatic download is disabled.
 
+## Using with AI Agents
+
+PAR CLI TTS works great with AI agents like [Claude Code](https://claude.ai/code). When using it in an agent, you'll need to grant permission for the agent to run the `par-tts` command.
+
+### Claude Code Setup
+
+The easiest way to allow Claude Code to use `par-tts` is to add the following to your `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(par-tts:*)"
+    ]
+  }
+}
+```
+
+This grants Claude Code permission to run any `par-tts` command without prompting for approval each time.
+
+### Example Agent Usage
+
+Once configured, your AI agent can easily generate speech:
+
+```bash
+# Agent can run TTS commands directly
+par-tts "Task completed successfully!"
+
+# Save audio for notifications
+par-tts "Build finished" --output /tmp/notify.mp3 --no-play
+```
+
 ## Configuration
 
 ### Configuration File (Recommended)
