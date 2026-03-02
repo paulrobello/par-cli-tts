@@ -105,6 +105,7 @@ def get_provider_kwargs(
     speed: float = 1.0,
     response_format: str = "mp3",
     lang: str = "en-us",
+    instructions: str | None = None,
 ) -> dict[str, Any]:
     """Build provider-specific keyword arguments.
 
@@ -115,6 +116,7 @@ def get_provider_kwargs(
         speed: Speech speed for OpenAI/Kokoro.
         response_format: Audio format for OpenAI.
         lang: Language code for Kokoro ONNX.
+        instructions: Voice instructions for OpenAI gpt-4o-mini-tts.
 
     Returns:
         Dictionary of provider-specific kwargs.
@@ -132,6 +134,7 @@ def get_provider_kwargs(
             {
                 "speed": speed,
                 "response_format": response_format,
+                "instructions": instructions,
             }
         )
     elif provider == "kokoro-onnx":
@@ -322,6 +325,7 @@ def handle_dump_config(
     speed: float,
     response_format: str,
     lang: str,
+    instructions: str | None,
     config_file: Any,
     config_manager: ConfigManager,
     tts_provider: TTSProvider,
@@ -341,6 +345,7 @@ def handle_dump_config(
         speed: Speech speed.
         response_format: Audio format.
         lang: Language code.
+        instructions: Voice instructions for OpenAI.
         config_file: Loaded config file.
         config_manager: Config manager instance.
         tts_provider: TTS provider instance.
@@ -368,6 +373,7 @@ def handle_dump_config(
             {
                 "speed": speed,
                 "response_format": response_format,
+                "instructions": instructions,
             }
         )
     elif provider == "kokoro-onnx":
@@ -406,6 +412,7 @@ def handle_speech_generation(
     speed: float,
     response_format: str,
     lang: str,
+    instructions: str | None,
 ) -> None:
     """Generate and output speech.
 
@@ -426,6 +433,7 @@ def handle_speech_generation(
         speed: Speech speed.
         response_format: Audio format.
         lang: Language code.
+        instructions: Voice instructions for OpenAI.
     """
     try:
         console.print("[cyan]Generating speech...[/cyan]")
@@ -438,6 +446,7 @@ def handle_speech_generation(
             speed=speed,
             response_format=response_format,
             lang=lang,
+            instructions=instructions,
         )
 
         audio_data = tts_provider.generate_speech(
@@ -638,6 +647,14 @@ def main(
             help="Language code for Kokoro ONNX (e.g., en-us)",
         ),
     ] = "en-us",
+    instructions: Annotated[
+        str | None,
+        typer.Option(
+            "-i",
+            "--instructions",
+            help="Voice instructions for OpenAI gpt-4o-mini-tts (e.g., 'Speak in a cheerful tone')",
+        ),
+    ] = None,
     volume: Annotated[
         float,
         typer.Option(
@@ -710,6 +727,13 @@ def main(
             help="Create a sample configuration file",
         ),
     ] = False,
+    clear_kokoro_models: Annotated[
+        bool,
+        typer.Option(
+            "--clear-kokoro-models",
+            help="Clear downloaded Kokoro ONNX models",
+        ),
+    ] = False,
 ) -> None:
     """
     Convert text to speech using various TTS providers.
@@ -752,7 +776,13 @@ def main(
 
     # Check if text is required (not needed for certain operations)
     text_required = not (
-        list_providers or list_voices or preview_voice or dump_config or refresh_cache or clear_cache_samples
+        list_providers
+        or list_voices
+        or preview_voice
+        or dump_config
+        or refresh_cache
+        or clear_cache_samples
+        or clear_kokoro_models
     )
 
     # Handle input operations
@@ -792,6 +822,19 @@ def main(
             console.print("[yellow]Cache management is only available for ElevenLabs provider[/yellow]")
             return
 
+    # Handle clear Kokoro models
+    if clear_kokoro_models:
+        from src.model_downloader import ModelDownloader
+
+        downloader = ModelDownloader()
+        if downloader.models_exist():
+            console.print("[cyan]Clearing Kokoro ONNX models...[/cyan]")
+            downloader.clear_models()
+            console.print("[green]Kokoro models cleared successfully[/green]")
+        else:
+            console.print("[yellow]No Kokoro models found to clear[/yellow]")
+        return
+
     # Handle list voices
     if list_voices:
         handle_list_voices(tts_provider)
@@ -823,6 +866,7 @@ def main(
             speed,
             response_format,
             lang,
+            instructions,
             config_file,
             config_manager,
             tts_provider,
@@ -890,6 +934,7 @@ def main(
         speed=speed,
         response_format=response_format,
         lang=lang,
+        instructions=instructions,
     )
 
 

@@ -45,7 +45,7 @@ dependencies = [
     "platformdirs>=4.3.0",
     "pyyaml>=6.0.0",
     "openai>=1.100.1",
-    "kokoro-onnx>=0.4.9",
+    "kokoro-onnx>=0.5.0",
     "soundfile>=0.13.1",
 ]
 

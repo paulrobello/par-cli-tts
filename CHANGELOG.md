@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-03-02
+
+### Added
+
+- **OpenAI gpt-4o-mini-tts model support** with steerable voice instructions
+  - New `--instructions` / `-i` option for voice style control
+  - Example: `par-tts "Hello" --instructions "Speak in a cheerful tone"`
+  - Supports emotional steering, accents, and tone control
+
+- **7 new OpenAI voices** added to the voice list:
+  - ash - Enthusiastic and energetic
+  - ballad - Warm and soulful
+  - coral - Friendly and approachable
+  - sage - Calm and wise
+  - verse - Clear and melodic
+  - marin - Gentle and soothing
+  - cedar - Rich and resonant
+
+### Changed
+
+- **ElevenLabs default model updated** from deprecated `eleven_monolingual_v1` to `eleven_multilingual_v2`
+  - Old model was deprecated and scheduled for removal by ElevenLabs
+  - New model supports 29 languages with better quality
+
+- **OpenAI default model updated** from `tts-1` to `gpt-4o-mini-tts`
+  - New model offers better quality and steerable voice control
+  - Legacy `tts-1` and `tts-1-hd` models still available via `--model`
+
+- **Kokoro ONNX dependency updated** from `>=0.4.9` to `>=0.5.0`
+
+### Deprecated
+
+- ElevenLabs `eleven_monolingual_v1` model (will be removed by provider)
+
+## [0.3.0] - 2025-03-02
+
 ### Added
 
 - **New utility modules** for better code organization
@@ -35,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Default voice definitions consolidated in `src/defaults.py`
   - Console instances consolidated in `src/console.py`
   - Voice ID detection utility in `src/utils.py`
+
+- **Documentation sync** - Updated all docs to match current implementation
 
 ### Fixed
 

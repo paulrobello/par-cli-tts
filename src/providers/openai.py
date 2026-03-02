@@ -17,13 +17,22 @@ class OpenAIProvider(TTSProvider):
     """OpenAI TTS provider."""
 
     # Available voices for OpenAI TTS
+    # tts-1/tts-1-hd support: alloy, ash, coral, echo, fable, onyx, nova, sage, shimmer
+    # gpt-4o-mini-tts adds: ballad, verse, marin, cedar
     VOICES = {
         "alloy": "Alloy - Neutral and balanced",
+        "ash": "Ash - Enthusiastic and energetic",
+        "ballad": "Ballad - Warm and soulful",
+        "coral": "Coral - Friendly and approachable",
         "echo": "Echo - Smooth and articulate",
         "fable": "Fable - Expressive and animated",
-        "onyx": "Onyx - Deep and authoritative",
         "nova": "Nova - Warm and friendly",
+        "onyx": "Onyx - Deep and authoritative",
+        "sage": "Sage - Calm and wise",
         "shimmer": "Shimmer - Soft and gentle",
+        "verse": "Verse - Clear and melodic",
+        "marin": "Marin - Gentle and soothing",
+        "cedar": "Cedar - Rich and resonant",
     }
 
     def __init__(self, api_key: str, **kwargs: Any):
@@ -52,7 +61,7 @@ class OpenAIProvider(TTSProvider):
     @property
     def default_model(self) -> str:
         """Default model for this provider."""
-        return "tts-1"
+        return "gpt-4o-mini-tts"
 
     @property
     def default_voice(self) -> str:
@@ -66,6 +75,7 @@ class OpenAIProvider(TTSProvider):
         model: str | None = None,
         response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = "mp3",
         speed: float = 1.0,
+        instructions: str | None = None,
         **kwargs: Any,
     ) -> bytes:
         """
@@ -73,10 +83,11 @@ class OpenAIProvider(TTSProvider):
 
         Args:
             text: Text to convert to speech.
-            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer).
-            model: Model to use (tts-1 or tts-1-hd).
+            voice: Voice to use (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar).
+            model: Model to use (gpt-4o-mini-tts, tts-1, or tts-1-hd).
             response_format: Audio format (mp3, opus, aac, flac, wav).
             speed: Speed of speech (0.25 to 4.0).
+            instructions: Instructions for voice style (gpt-4o-mini-tts only).
             **kwargs: Additional parameters.
 
         Returns:
@@ -88,13 +99,20 @@ class OpenAIProvider(TTSProvider):
         # Ensure speed is within valid range
         speed = max(0.25, min(4.0, speed))
 
-        response = self.client.audio.speech.create(
-            model=model,
-            voice=voice,  # type: ignore
-            input=text,
-            response_format=response_format,  # type: ignore
-            speed=speed,
-        )
+        # Build request parameters
+        request_params: dict[str, Any] = {
+            "model": model,
+            "voice": voice,
+            "input": text,
+            "response_format": response_format,
+            "speed": speed,
+        }
+
+        # Add instructions parameter for gpt-4o-mini-tts model
+        if instructions and model == "gpt-4o-mini-tts":
+            request_params["instructions"] = instructions
+
+        response = self.client.audio.speech.create(**request_params)
 
         # Get audio data as bytes
         audio_bytes = response.content

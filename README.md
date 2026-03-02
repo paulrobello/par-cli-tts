@@ -5,7 +5,7 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.2.2-green.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
@@ -13,6 +13,18 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
 ## What's New
+
+### v0.4.0
+- **OpenAI gpt-4o-mini-tts** - New steerable TTS model with `--instructions` option
+- **7 new OpenAI voices** - ash, ballad, coral, sage, verse, marin, cedar (13 total)
+- **ElevenLabs model updated** - Changed from deprecated `eleven_monolingual_v1` to `eleven_multilingual_v2`
+- **Kokoro ONNX 0.5.0** - Updated to latest version
+
+### v0.3.0
+- Major code refactoring with better modularity and code organization
+- New utility modules for shared console, defaults, and HTTP client
+- Test suite with 46 tests for better reliability
+- Documentation synced to match current implementation
 
 ### v0.2.2
 - Updated all HTTP requests and downloaders to ignore SSL certificate errors
@@ -341,6 +353,10 @@ par-tts "Stable voice" --stability 0.8 --similarity 0.7
 # Adjust OpenAI speech speed
 par-tts "Fast speech" --provider openai --speed 1.5
 
+# Use OpenAI with voice instructions (gpt-4o-mini-tts only)
+par-tts "Hello there!" --provider openai --instructions "Speak in a cheerful and positive tone"
+par-tts "Good morning" -P openai -i "Speak like a pirate"
+
 # Keep temp files after playback
 par-tts "Keep this" --keep-temp
 
@@ -447,6 +463,7 @@ make clear-cache     # Clear voice cache including samples
 |--------|-------|-------------|---------|
 | `--speed` | `-r` | Speech speed (0.25 to 4.0) | 1.0 |
 | `--format` | `-f` | Audio format (mp3, opus, aac, flac, wav) | mp3 |
+| `--instructions` | `-i` | Voice instructions for gpt-4o-mini-tts (e.g., "Speak cheerfully") | None |
 
 ### Kokoro ONNX Options
 
@@ -480,7 +497,12 @@ make clear-cache     # Clear voice cache including samples
 
 ### ElevenLabs
 
-- **Models**: eleven_monolingual_v1, eleven_multilingual_v1, eleven_multilingual_v2
+- **Models**:
+  - `eleven_multilingual_v2` (default) - Most lifelike, 29 languages
+  - `eleven_v3` - Most expressive, 70+ languages
+  - `eleven_flash_v2.5` - Ultra-low latency (~75ms), 32 languages
+  - `eleven_turbo_v2.5` - Balanced quality/speed, 32 languages
+  - ~~`eleven_monolingual_v1`~~ - Deprecated, will be removed
 - **Voices**: 25+ voices with different accents and styles
 - **Features**: Voice cloning, stability control, similarity boost
 - **Smart Caching**:
@@ -492,15 +514,28 @@ make clear-cache     # Clear voice cache including samples
 
 ### OpenAI
 
-- **Models**: tts-1 (optimized for speed), tts-1-hd (optimized for quality)
-- **Voices**:
+- **Models**:
+  - `gpt-4o-mini-tts` (default) - Steerable TTS with instructions
+  - `tts-1` - Optimized for speed
+  - `tts-1-hd` - Optimized for quality
+- **Voices** (13 total):
   - alloy - Neutral and balanced
+  - ash - Enthusiastic and energetic
+  - ballad - Warm and soulful
+  - coral - Friendly and approachable
   - echo - Smooth and articulate
   - fable - Expressive and animated
-  - onyx - Deep and authoritative
   - nova - Warm and friendly (default)
+  - onyx - Deep and authoritative
+  - sage - Calm and wise
   - shimmer - Soft and gentle
-- **Features**: Speed control (0.25x to 4x), multiple output formats
+  - verse - Clear and melodic
+  - marin - Gentle and soothing
+  - cedar - Rich and resonant
+- **Features**:
+  - Speed control (0.25x to 4x)
+  - Multiple output formats
+  - Voice instructions for gpt-4o-mini-tts (steer emotion, accent, tone)
 - **Output Formats**: mp3, opus, aac, flac, wav, pcm
 - **API Key**: Set `OPENAI_API_KEY` in your .env file
 

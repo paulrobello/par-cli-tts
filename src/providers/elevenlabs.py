@@ -46,7 +46,7 @@ class ElevenLabsProvider(TTSProvider):
     @property
     def default_model(self) -> str:
         """Default model for this provider."""
-        return "eleven_monolingual_v1"
+        return "eleven_multilingual_v2"
 
     @property
     def default_voice(self) -> str:
