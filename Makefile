@@ -1,6 +1,6 @@
 ###############################################################################
 # Common make values.
-lib    := par_cli_tts
+lib    := par_tts
 run    := uv run
 python := $(run) python
 pyright := $(run) pyright
@@ -114,7 +114,7 @@ test:				# Run tests with pytest
 
 .PHONY: test-cov
 test-cov:			# Run tests with coverage report
-	$(run) pytest tests/ -v --cov=par_cli_tts --cov-report=term-missing
+	$(run) pytest tests/ -v --cov=par_tts --cov-report=term-missing
 
 .PHONY: checkall
 checkall: format lint typecheck test	# Check all the things

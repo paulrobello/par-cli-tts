@@ -3,7 +3,7 @@ name = "par-cli-tts"
 dynamic = [
     "version",
 ]
-description = "PAR CLI TTS - Command line text-to-speech tool using ElevenLabs with voice caching and name resolution"
+description = "PAR TTS — Text-to-speech library and CLI supporting ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Gemini"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -34,10 +34,16 @@ keywords = [
     "tts",
     "text-to-speech",
     "elevenlabs",
+    "openai",
+    "kokoro",
+    "deepgram",
+    "gemini",
     "cli",
     "audio",
+    "library",
 ]
 dependencies = [
+    "httpx>=0.27.0",
     "elevenlabs>=2.44.0",
     "python-dotenv>=1.2.0",
     "typer>=0.24.0",
