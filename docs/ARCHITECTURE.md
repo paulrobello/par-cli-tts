@@ -24,8 +24,8 @@ PAR CLI TTS is a command-line text-to-speech tool that provides a unified interf
 ```mermaid
 graph TB
     subgraph "User Interface Layer"
-        CLI[CLI Interface<br/>tts_cli.py]
-        KCLI[Kokoro CLI<br/>kokoro_cli.py]
+        CLI[CLI Interface<br/>cli/tts_cli.py]
+        KCLI[Kokoro CLI<br/>cli/kokoro_cli.py]
         ENV[Environment Variables<br/>.env]
         CONF[Config File<br/>~/.config/par-tts/config.yaml]
     end
@@ -34,10 +34,11 @@ graph TB
         PM[Provider Manager]
         VC[Voice Cache<br/>voice_cache.py]
         MD[Model Downloader<br/>model_downloader.py]
-        CFG[Configuration Manager<br/>config_file.py]
+        CFG[Configuration Manager<br/>cli/config_file.py]
         ERR[Error Handler<br/>errors.py]
         UTIL[Utilities<br/>utils.py]
-        CONS[Console<br/>console.py]
+        AUDIO[Audio Playback<br/>audio.py]
+        CONS[Console<br/>cli/console.py]
         HTTP[HTTP Client<br/>http_client.py]
         DFLT[Defaults<br/>defaults.py]
     end
@@ -78,6 +79,7 @@ graph TB
     PM --> BASE
     PM --> UTIL
     PM --> DFLT
+    BASE --> AUDIO
     BASE --> EL
     BASE --> OA
     BASE --> KO
@@ -116,6 +118,7 @@ graph TB
     style ERR fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style UTIL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style CONS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style AUDIO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style HTTP fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style DFLT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style BASE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -151,7 +154,7 @@ graph TB
 
 ### Core Components
 
-#### 1. CLI Interface (`par_tts/tts_cli.py`)
+#### 1. CLI Interface (`par_tts/cli/tts_cli.py`)
 
 The main entry point that handles:
 - Command-line argument parsing using Typer with short flags
@@ -177,10 +180,12 @@ The main entry point that handles:
 Abstract base class defining the provider interface:
 - Speech generation with Iterator[bytes] support
 - Voice listing and resolution
-- Audio file operations with streaming
+- Default `save_audio()` and `play_audio()` implementations in the base class (providers override only when needed, e.g. ElevenLabs SDK save)
 - Volume control for playback
+- `PROVIDER_KWARGS` class attribute for declaring provider-specific options
 - Provider metadata
 - Optional API key for offline providers
+- Per-provider options dataclasses: `ElevenLabsOptions`, `OpenAIOptions`, `KokoroOptions`, `DeepgramOptions`, `GeminiOptions`
 
 #### 3. Provider Implementations
 
@@ -194,7 +199,7 @@ Abstract base class defining the provider interface:
 - Supported formats: mp3, pcm, ulaw
 
 **OpenAI Provider (`par_tts/providers/openai.py`)**
-- Multiple audio formats (mp3, opus, aac, flac, wav, pcm)
+- Multiple audio formats (mp3, opus, aac, flac, wav)
 - Variable speech speed (0.25 to 4.0)
 - 13 voice options (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar)
 - gpt-4o-mini-tts model with voice instructions support
@@ -235,6 +240,7 @@ Intelligent caching layer for voice data:
 - XDG-compliant storage
 - 7-day expiry policy with change detection
 - Automatic cache invalidation via content hashing
+- HMAC-SHA256 integrity verification on load and save
 - Fuzzy voice name matching
 - Voice sample caching for offline preview
 - Manual cache refresh (--refresh-cache)
@@ -254,18 +260,21 @@ Automatic model management for offline providers:
 
 Common utilities for the application:
 - `stream_to_file()`: Memory-efficient streaming
-- `write_with_stream()`: Write audio stream to open file handle
 - `sanitize_debug_output()`: API key masking for debug output
 - `verify_file_checksum()`: SHA256 verification
 - `calculate_file_checksum()`: Checksum generation
 - `looks_like_voice_id()`: Detect if string is a voice ID vs name
+
+#### 7. Audio Playback (`par_tts/audio.py`)
+
+Dedicated module for cross-platform audio playback (extracted from utils for library use):
 - `play_audio_with_player()`: Cross-platform audio playback with volume
 - `_find_windows_audio_player()`: Detect available Windows audio player
 - `_play_with_powershell()`: Windows PowerShell MediaPlayer fallback
 - `_play_audio_windows()`: Windows-specific audio playback
 - `play_audio_bytes()`: Play audio from bytes using system player
 
-#### 7. Configuration File Manager (`par_tts/config_file.py`)
+#### 8. Configuration File Manager (`par_tts/cli/config_file.py`)
 
 YAML-based configuration file support:
 - `ConfigFile`: Pydantic model for config structure with validation
@@ -275,37 +284,30 @@ YAML-based configuration file support:
 - Per-provider voice mapping (`voices:`) keyed by provider name
 - CLI argument precedence over config file
 - Configuration schema validation with Pydantic (rejects unknown providers in `voices:`)
+- Config file permissions enforced to 0600 (owner-only read/write)
 
-#### 8. Error Handling Module (`par_tts/errors.py`)
+#### 9. Error Handling Module (`par_tts/errors.py`)
 
 Centralized error management:
 - `ErrorType`: Enum for categorized exit codes (User: 1, System: 2, File: 3, Config: 4)
 - `TTSError`: Base exception class for TTS-specific errors
-- `handle_error()`: Consistent error reporting with Rich console
+- `handle_error()`: Log error via stdlib logging and raise `TTSError` (library mode) or call `sys.exit()` when `exit_on_error=True` (CLI mode)
+- `set_debug_mode()` / `_debug_mode`: Thread-safe debug flag using `contextvars.ContextVar`
 - `validate_api_key()`: API key validation for cloud providers
 - `validate_file_path()`: File path validation with security checks
-- `wrap_provider_error()`: Decorator for consistent provider error handling
-- Debug mode support with detailed stack traces
 
-#### 9. Default Values (`par_tts/defaults.py`)
+#### 10. Default Values (`par_tts/defaults.py`)
 
 Centralized default configuration values:
 - `DEFAULT_PROVIDER`: kokoro-onnx
 - `DEFAULT_ELEVENLABS_VOICE`: Juniper
 - `DEFAULT_OPENAI_VOICE`: nova
 - `DEFAULT_KOKORO_VOICE`: af_sarah
+- `DEFAULT_DEEPGRAM_VOICE`: aura-2-thalia-en
+- `DEFAULT_GEMINI_VOICE`: Kore
 - `get_default_voice()`: Get default voice for a provider (checks env vars first)
 
-#### 10. Configuration Dataclasses (`par_tts/config.py`)
-
-Structured configuration dataclasses for internal use:
-- `AudioSettings`: Format, speed, stability, similarity, lang settings
-- `OutputSettings`: Output path, play audio, keep temp, temp dir, debug flags
-- `ProviderSettings`: Provider name, voice, model, API key
-- `TTSConfig`: Complete configuration combining all settings
-- `get_provider_kwargs()`: Extract provider-specific kwargs from config
-
-#### 11. Console Output (`par_tts/console.py`)
+#### 11. Console Output (`par_tts/cli/console.py`)
 
 Shared console instances for consistent output:
 - `console`: Standard output Console instance (stdout)
@@ -318,7 +320,7 @@ HTTP client creation with consistent configuration:
 - Configurable timeout (default: 10 seconds)
 - SSL verification options
 
-#### 13. Kokoro Model CLI (`par_tts/kokoro_cli.py`)
+#### 13. Kokoro Model CLI (`par_tts/cli/kokoro_cli.py`)
 
 Dedicated CLI for Kokoro ONNX model management:
 - `download`: Download model files with --force option
@@ -391,7 +393,7 @@ classDiagram
     class TTSProvider {
         <<abstract>>
         +api_key: str | None
-        +config: dict
+        +PROVIDER_KWARGS: dict~str, Any~
         +generate_speech(text, voice, model) bytes | Iterator~bytes~
         +list_voices() list~Voice~
         +resolve_voice(identifier) str
@@ -414,14 +416,17 @@ classDiagram
     class ElevenLabsProvider {
         +client: ElevenLabs
         +cache: VoiceCache
+        +PROVIDER_KWARGS: stability, similarity_boost
         +generate_speech(text, voice, model, stability, similarity_boost)
         +list_voices()
         +resolve_voice(identifier)
+        +save_audio(data, path)
     }
 
     class OpenAIProvider {
         +client: OpenAI
         +VOICES: dict
+        +PROVIDER_KWARGS: speed, response_format, instructions
         +generate_speech(text, voice, model, response_format, speed, instructions)
         +list_voices()
         +resolve_voice(identifier)
@@ -431,10 +436,10 @@ classDiagram
         +kokoro: Kokoro
         +model_path: str
         +voice_path: str
+        +PROVIDER_KWARGS: speed, lang
         +generate_speech(text, voice, model, speed, lang)
         +list_voices()
         +resolve_voice(identifier)
-        -auto_download_models()
     }
 
     class DeepgramProvider {
@@ -473,6 +478,8 @@ classDiagram
         +get_voice_by_id(id) dict
         +update_cache(client) None
         +clear_cache() None
+        -_compute_cache_hmac() str
+        -_save_cache() None
     }
 
     TTSProvider <|-- ElevenLabsProvider
@@ -679,7 +686,8 @@ graph TB
         end
 
         subgraph "Cache Data Structure"
-            DATA["{<br/>voices: {id: {name, labels, category}},<br/>timestamp: ISO8601<br/>}"]
+            DATA["{<br/>voices: {id: {name, labels, category}},<br/>timestamp: ISO8601,<br/>voice_hash: SHA256,<br/>samples: {id: {text, audio}}<br/>}"]
+            HMAC[Integrity HMAC<br/># integrity: HMAC-SHA256]
         end
     end
 
@@ -693,6 +701,8 @@ graph TB
     SAVE --> FILE
     UPDATE --> DATA
     DATA --> FILE
+    DATA --> HMAC
+    HMAC --> FILE
     FILE --> DIR
 
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -704,6 +714,7 @@ graph TB
     style UPDATE fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style CLEAR fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style DATA fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style HMAC fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
 ```
 
 ### Cache Lifecycle
@@ -716,6 +727,8 @@ stateDiagram-v2
     CheckCache --> CreateCache: No Cache File
 
     CacheExists --> CheckExpiry: Load Cache Data
+    CacheExists --> DiscardCorrupt: HMAC Integrity Check Failed
+    DiscardCorrupt --> FetchFromAPI: Rebuild Cache
     CreateCache --> FetchFromAPI: Initialize Empty Cache
 
     CheckExpiry --> CacheValid: < 7 days old
@@ -745,6 +758,7 @@ stateDiagram-v2
         - Labels
         - Category
         - Timestamp
+        - HMAC-SHA256 integrity
     end note
 ```
 
@@ -917,8 +931,8 @@ flowchart TD
 graph TD
     subgraph "Configuration Sources - Priority Order"
         CLI[1. CLI Arguments<br/>Highest Priority<br/>All with short flags]
-        ENV[2. Environment Variables]
-        CONF[3. Config File<br/>~/.config/par-tts/config.yaml]
+        CONF[2. Config File<br/>~/.config/par-tts/config.yaml]
+        ENV[3. Environment Variables]
         DEFAULT[4. Default Values<br/>Lowest Priority]
     end
 
@@ -1047,9 +1061,9 @@ sequenceDiagram
     participant PyPI as PyPI
 
     Dev->>GH: Push to main branch
-    GH->>GA: Trigger build.yml
+    GH->>GA: Trigger publish.yml
 
-    GA->>GA: Setup Python 3.12
+    GA->>GA: Setup Python 3.13
     GA->>GA: Install UV
     GA->>GA: Install dependencies
     GA->>GA: Run linting (Ruff)
@@ -1099,23 +1113,21 @@ flowchart TD
         M1[generate_speech<br/>Convert text to audio]
         M2[list_voices<br/>Return available voices]
         M3[resolve_voice<br/>Map name to ID]
-        M4[save_audio<br/>Write to file]
-        M5[play_audio<br/>Play audio data]
         P1[name property<br/>Provider display name]
         P2[supported_formats<br/>Audio formats list]
         P3[default_model<br/>Default TTS model]
         P4[default_voice<br/>Default voice ID]
+        PK[PROVIDER_KWARGS<br/>Provider-specific options]
     end
 
     Step3 --> M1
     Step3 --> M2
     Step3 --> M3
-    Step3 --> M4
-    Step3 --> M5
     Step3 --> P1
     Step3 --> P2
     Step3 --> P3
     Step3 --> P4
+    Step3 --> PK
 
     style Step1 fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Step2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -1132,6 +1144,7 @@ flowchart TD
     style P2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P3 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P4 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style PK fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
 ```
 
 ### Provider Template
@@ -1143,6 +1156,13 @@ from par_tts.providers.base import TTSProvider, Voice
 
 class NewProvider(TTSProvider):
     """New TTS provider implementation."""
+
+    # Declare provider-specific kwargs accepted by generate_speech().
+    # Keys are kwarg names; values are defaults.  The CLI uses this
+    # mapping to build provider-specific option dicts without if/elif chains.
+    PROVIDER_KWARGS = {
+        "speed": 1.0,
+    }
 
     def __init__(self, api_key: str | None = None, **kwargs: Any):
         super().__init__(api_key, **kwargs)
@@ -1177,13 +1197,8 @@ class NewProvider(TTSProvider):
         # Implementation
         pass
 
-    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
-        # Implementation
-        pass
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        # Implementation
-        pass
+    # save_audio() and play_audio() are provided by the TTSProvider base class.
+    # Override them only if the provider needs custom handling (e.g. ElevenLabs SDK save).
 ```
 
 ## Error Handling and Recovery
@@ -1437,10 +1452,11 @@ graph TB
         end
 
         subgraph "Data Protection"
-            CACHE_SEC[Cache Security<br/>User-only Access]
+            CACHE_SEC[Cache Security<br/>HMAC-SHA256 Integrity]
             TEMP_SEC[Temp File Security<br/>Secure Deletion]
             AUDIO_SEC[Audio Privacy<br/>No Cloud Storage]
             CHECKSUM[SHA256 Verification<br/>Model Integrity]
+            CONF_SEC[Config File Permissions<br/>0600 Owner-Only]
         end
 
         subgraph "Input Validation"
@@ -1458,6 +1474,7 @@ graph TB
 
     KEYS --> VALID
     CACHE_SEC --> PERMS[File Permissions<br/>0600]
+    CONF_SEC --> PERMS
     TEXT_VAL --> ESCAPE[Special Character Handling]
     HTTPS --> TLS[TLS 1.2+]
 
@@ -1467,6 +1484,8 @@ graph TB
     style CACHE_SEC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style TEMP_SEC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style AUDIO_SEC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style CHECKSUM fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style CONF_SEC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style TEXT_VAL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style PATH_VAL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CMD_VAL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
