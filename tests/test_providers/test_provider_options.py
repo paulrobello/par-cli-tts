@@ -1,37 +1,14 @@
-"""Tests for per-provider options and SpeechResult."""
-
-from dataclasses import fields
+"""Tests for per-provider options."""
 
 import pytest
 
 from par_tts.providers.base import (
+    DeepgramOptions,
     ElevenLabsOptions,
     GeminiOptions,
     KokoroOptions,
     OpenAIOptions,
-    DeepgramOptions,
-    SpeechResult,
-    Voice,
 )
-
-
-class TestSpeechResult:
-    def test_construct_with_required_fields(self):
-        sr = SpeechResult(audio=b"\x00\x01", content_type="audio/mp3")
-        assert sr.audio == b"\x00\x01"
-        assert sr.content_type == "audio/mp3"
-        assert sr.sample_rate is None
-        assert sr.format is None
-
-    def test_construct_with_all_fields(self):
-        sr = SpeechResult(
-            audio=b"\x00",
-            content_type="audio/wav",
-            sample_rate=24000,
-            format="wav",
-        )
-        assert sr.sample_rate == 24000
-        assert sr.format == "wav"
 
 
 class TestPerProviderOptions:

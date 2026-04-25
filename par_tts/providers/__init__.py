@@ -6,7 +6,6 @@ from par_tts.providers.base import (
     GeminiOptions,
     KokoroOptions,
     OpenAIOptions,
-    SpeechResult,
     TTSProvider,
     Voice,
 )
@@ -19,7 +18,6 @@ from par_tts.providers.openai import OpenAIProvider
 __all__ = [
     "TTSProvider",
     "Voice",
-    "SpeechResult",
     "ElevenLabsOptions",
     "OpenAIOptions",
     "KokoroOptions",

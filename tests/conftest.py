@@ -1,8 +1,6 @@
 """Shared pytest fixtures for PAR CLI TTS tests."""
 
-import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

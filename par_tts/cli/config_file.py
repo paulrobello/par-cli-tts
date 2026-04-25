@@ -1,5 +1,6 @@
 """Configuration file support for PAR CLI TTS."""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +95,14 @@ class ConfigManager:
         if not self.config_file.exists():
             return None
 
+        # Ensure restrictive permissions on existing config (may contain API keys)
+        try:
+            current_mode = self.config_file.stat().st_mode & 0o777
+            if current_mode != 0o600:
+                os.chmod(self.config_file, 0o600)
+        except OSError:
+            pass
+
         try:
             with open(self.config_file, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -185,10 +194,15 @@ class ConfigManager:
         # Create config directory if it doesn't exist
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write sample config
-        with open(self.config_file, "w", encoding="utf-8") as f:
-            for line in sample_lines:
-                f.write(f"{line}\n")
+        # Write sample config with restrictive permissions (owner-only read/write)
+        fd = os.open(str(self.config_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                for line in sample_lines:
+                    f.write(f"{line}\n")
+        except Exception:
+            os.close(fd)
+            raise
 
         console.print(f"[green]✓ Created sample config at {self.config_file}[/green]")
         console.print("[dim]Edit this file to set your default preferences[/dim]")

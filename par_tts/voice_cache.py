@@ -5,23 +5,41 @@ This module handles caching of voice information to improve performance
 when translating voice names to IDs.
 """
 
+from __future__ import annotations
+
+import base64
 import hashlib
+import hmac
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import platformdirs
 import yaml
-from elevenlabs.client import ElevenLabs
 
 from par_tts.utils import looks_like_voice_id
+
+if TYPE_CHECKING:
+    from elevenlabs.client import ElevenLabs
 
 _logger = logging.getLogger(__name__)
 
 CACHE_EXPIRY_DAYS = 7  # Cache expires after 7 days
 CACHE_CHECK_INTERVAL_HOURS = 24  # Check for changes every 24 hours
+
+# Key material for HMAC integrity check -- derived per-user so cache files
+# are not portable across machines (not a substitute for real secret management).
+_HMAC_KEY = hashlib.sha256(
+    f"par-tts-voice-cache:{platformdirs.user_cache_dir('par-tts')}:{os.getuid() if hasattr(os, 'getuid') else 'win'}".encode()
+).digest()
+
+
+def _compute_cache_hmac(data: str) -> str:
+    """Compute HMAC-SHA256 of cache data for integrity verification."""
+    return hmac.new(_HMAC_KEY, data.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 class VoiceCache:
@@ -44,6 +62,17 @@ class VoiceCache:
         self.cache_file = self.cache_dir / "voice_cache.yaml"
         self.cache_data: dict[str, Any] = self._load_cache()
 
+    @staticmethod
+    def _empty_cache() -> dict[str, Any]:
+        """Return an empty cache structure."""
+        return {
+            "voices": {},
+            "timestamp": None,
+            "last_check": None,
+            "voice_hash": None,
+            "samples": {},
+        }
+
     def _load_cache(self) -> dict[str, Any]:
         """
         Load cache from disk.
@@ -61,16 +90,35 @@ class VoiceCache:
             }
 
         try:
-            with open(self.cache_file, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-                # Ensure all keys exist
-                return {
-                    "voices": data.get("voices", {}),
-                    "timestamp": data.get("timestamp"),
-                    "last_check": data.get("last_check"),
-                    "voice_hash": data.get("voice_hash"),
-                    "samples": data.get("samples", {}),
-                }
+            raw_text = self.cache_file.read_text(encoding="utf-8")
+            data = yaml.safe_load(raw_text) or {}
+
+            # Verify integrity HMAC from header comment, if present.
+            # Format: "# integrity: <hex-digest>"
+            stored_hmac: str | None = None
+            data_text = raw_text
+            for line in raw_text.splitlines():
+                if line.startswith("# integrity: "):
+                    stored_hmac = line[len("# integrity: ") :].strip()
+                    # Data text for verification is everything after the header
+                    newline_pos = raw_text.index("\n", raw_text.index(line))
+                    data_text = raw_text[newline_pos + 1 :]
+                    break
+
+            if stored_hmac:
+                expected_hmac = _compute_cache_hmac(data_text)
+                if not hmac.compare_digest(stored_hmac, expected_hmac):
+                    _logger.warning("Cache integrity check failed — discarding corrupted cache")
+                    return self._empty_cache()
+
+            # Ensure all keys exist
+            return {
+                "voices": data.get("voices", {}),
+                "timestamp": data.get("timestamp"),
+                "last_check": data.get("last_check"),
+                "voice_hash": data.get("voice_hash"),
+                "samples": data.get("samples", {}),
+            }
         except Exception as e:
             _logger.warning("Could not load cache: %s", e)
             return {
@@ -82,10 +130,17 @@ class VoiceCache:
             }
 
     def _save_cache(self) -> None:
-        """Save cache to disk."""
+        """Save cache to disk with integrity HMAC."""
         try:
+            # Serialize data first, then compute HMAC over the serialized form
+            data_text = yaml.safe_dump(self.cache_data, default_flow_style=False)
+            cache_hmac = _compute_cache_hmac(data_text)
+
+            # Prepend the HMAC as a comment so YAML parsers that strip it
+            # still produce the same serialization we verified against.
             with open(self.cache_file, "w", encoding="utf-8") as f:
-                yaml.safe_dump(self.cache_data, f, default_flow_style=False)
+                f.write(f"# integrity: {cache_hmac}\n")
+                f.write(data_text)
         except Exception as e:
             _logger.warning("Could not save cache: %s", e)
 
@@ -293,8 +348,6 @@ class VoiceCache:
         """
         try:
             # Store as base64 to be YAML-safe
-            import base64
-
             if "samples" not in self.cache_data:
                 self.cache_data["samples"] = {}
 
@@ -318,8 +371,6 @@ class VoiceCache:
             Tuple of (sample_text, audio_data) if found, None otherwise.
         """
         try:
-            import base64
-
             sample = self.cache_data.get("samples", {}).get(voice_id)
             if sample:
                 audio_data = base64.b64decode(sample["audio"])

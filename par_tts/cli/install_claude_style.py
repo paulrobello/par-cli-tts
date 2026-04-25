@@ -7,7 +7,6 @@ par-tts command's argument parsing.
 """
 
 import json
-import re
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -105,37 +104,8 @@ def install(
         try:
             content = bundled_style.read_text(encoding="utf-8")
 
-            # Customize the user name in the content
-            content = re.sub(
-                r"\*\*USER_NAME\*\*:\s*\w+",
-                f"**USER_NAME**: {user_name}",
-                content,
-            )
-            content = re.sub(
-                r"## Audio Summary for \w+",
-                f"## Audio Summary for {user_name}",
-                content,
-            )
-            content = re.sub(
-                r"Address \w+ directly",
-                f"Address {user_name} directly",
-                content,
-            )
-            content = re.sub(
-                r"Paul,",
-                f"{user_name},",
-                content,
-            )
-            content = re.sub(
-                r'"Paul,',
-                f'"{user_name},',
-                content,
-            )
-            content = re.sub(
-                r"\[Bash tool call: par-tts \"[^\"]*Paul",
-                f'[Bash tool call: par-tts "{user_name}',
-                content,
-            )
+            # Replace the {{USER_NAME}} template placeholder with the chosen name.
+            content = content.replace("{{USER_NAME}}", user_name)
 
             output_style_file.write_text(content, encoding="utf-8")
             console.print(f"[green]✓ Installed output style to: {output_style_file}[/green]")

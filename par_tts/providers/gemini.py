@@ -10,11 +10,8 @@ single-shot ``bytes`` payload (the response is not chunked).
 import base64
 import logging
 import struct
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
-from par_tts.audio import play_audio_bytes
 from par_tts.defaults import DEFAULT_GEMINI_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
@@ -166,7 +163,11 @@ class GeminiProvider(TTSProvider):
 
         resp = self.client.post(url, headers=headers, json=body)
         if resp.status_code != 200:
-            raise RuntimeError(f"Gemini API error {resp.status_code}: {resp.text[:500]}")
+            # Sanitize response text to avoid leaking API key in error messages
+            error_text = resp.text[:500]
+            if self.api_key and self.api_key in error_text:
+                error_text = error_text.replace(self.api_key, "[REDACTED]")
+            raise RuntimeError(f"Gemini API error {resp.status_code}: {error_text}")
 
         payload = resp.json()
         try:
@@ -179,9 +180,31 @@ class GeminiProvider(TTSProvider):
         return wrap_pcm_as_wav(pcm)
 
     def list_voices(self) -> list[Voice]:
+        """Return all 30 prebuilt Gemini TTS voices.
+
+        Returns:
+            List of Voice objects with id and name set to the canonical
+            voice name, labels containing the style descriptor, and
+            category set to "Gemini TTS".
+        """
         return [Voice(id=name, name=name, labels=[style], category="Gemini TTS") for name, style in _GEMINI_VOICES]
 
     def resolve_voice(self, voice_identifier: str) -> str:
+        """Resolve a voice name to its canonical Gemini voice name.
+
+        Voice names are case-insensitive.  If the input exactly matches
+        (ignoring case) a known voice, the canonical form is returned.
+        Falls back to a single-result partial substring match.
+
+        Args:
+            voice_identifier: Voice name to resolve (e.g. ``"kore"``).
+
+        Returns:
+            Canonical voice name (e.g. ``"Kore"``).
+
+        Raises:
+            ValueError: If the voice name matches zero or multiple voices.
+        """
         ident = voice_identifier.strip().lower()
         if ident in self._VOICE_CANONICAL:
             canonical = self._VOICE_CANONICAL[ident]
@@ -196,16 +219,3 @@ class GeminiProvider(TTSProvider):
             return partial[0]
 
         raise ValueError(f"Voice '{voice_identifier}' not found. Available: {', '.join(sorted(self.VOICE_NAMES))}")
-
-    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
-        path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(audio_data, bytes):
-            path.write_bytes(audio_data)
-        else:
-            self.stream_to_file(audio_data, path)
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        if not isinstance(audio_data, bytes):
-            audio_data = b"".join(audio_data)
-        play_audio_bytes(audio_data, volume=volume, suffix=".wav")

@@ -1,7 +1,7 @@
 """Verify par_tts library modules don't import rich.console at module level."""
+
 import importlib
 import sys
-
 
 MODULES_TO_CHECK = [
     "par_tts.providers.openai",

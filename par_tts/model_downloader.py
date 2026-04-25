@@ -1,10 +1,11 @@
 """Model downloader for Kokoro ONNX TTS models."""
 
 import logging
-import ssl
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from platformdirs import user_data_dir
 
@@ -72,15 +73,10 @@ class ModelDownloader:
         """
         temp_path = dest_path.with_suffix(".tmp")
         try:
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-            https_handler = urllib.request.HTTPSHandler(context=ssl_context)
-            opener = urllib.request.build_opener(https_handler)
-            urllib.request.install_opener(opener)
-
             _logger.info("Downloading %s (~%d MB)...", description, size_mb)
             urllib.request.urlretrieve(url, temp_path)
+            # Restrict temp file permissions to owner-only
+            os.chmod(temp_path, 0o600)
 
             if sha256:
                 _logger.info("Verifying checksum...")
@@ -168,7 +164,7 @@ class ModelDownloader:
             # Directory not empty, that's fine
             pass
 
-    def get_model_info(self) -> dict:
+    def get_model_info(self) -> dict[str, Any]:
         """Get information about model files.
 
         Returns:
@@ -176,7 +172,7 @@ class ModelDownloader:
         """
         model_path, voice_path = self.get_model_paths()
 
-        info: dict = {"data_directory": str(self.data_dir), "models": {}}
+        info: dict[str, Any] = {"data_directory": str(self.data_dir), "models": {}}
 
         for name, path in [("model", model_path), ("voices", voice_path)]:
             if path.exists():

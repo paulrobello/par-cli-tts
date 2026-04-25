@@ -10,7 +10,6 @@ voices, multiple providers, and various output options.
 import os
 import sys
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -22,10 +21,25 @@ from rich.table import Table
 from par_tts.cli.config_file import ConfigManager
 from par_tts.cli.console import console
 from par_tts.defaults import DEFAULT_PROVIDER, get_default_voice
-from par_tts.errors import ErrorType, handle_error, validate_api_key, validate_file_path
+from par_tts.errors import ErrorType, TTSError, handle_error, set_debug_mode, validate_api_key, validate_file_path
 from par_tts.providers import PROVIDERS, TTSProvider
 
 app = typer.Typer(help="Text-to-speech command line tool with multiple provider support")
+
+
+def _run_cli() -> None:
+    """Invoke the Typer app, catching TTSError and translating to sys.exit().
+
+    Library code raises :class:`TTSError` instead of calling ``sys.exit()`` so
+    that programmatic users can handle errors gracefully.  This wrapper is the
+    CLI boundary: it catches those exceptions, prints a user-friendly message,
+    and exits with the appropriate code.
+    """
+    try:
+        app()
+    except TTSError as exc:
+        console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+        sys.exit(exc.error_type.exit_code)
 
 
 def get_api_key(provider: str, config_file: Any = None) -> str | None:
@@ -40,7 +54,7 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
         API key string or None for providers that don't need one.
 
     Raises:
-        SystemExit: If API key is not found anywhere.
+        TTSError: If API key is not found anywhere.
     """
     # kokoro-onnx doesn't need an API key
     if provider == "kokoro-onnx":
@@ -58,7 +72,6 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
 
     if provider not in key_map:
         handle_error(f"Unknown provider '{provider}'", ErrorType.INVALID_PROVIDER)
-        return None  # For type checker, never reached
 
     config_field, *env_vars = key_map[provider]
 
@@ -80,7 +93,6 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
         f"{primary} not found. Please set {primary}{alt} in your config file or environment",
         ErrorType.MISSING_API_KEY,
     )
-    return None  # never reached; handle_error exits
 
 
 def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) -> TTSProvider:
@@ -96,7 +108,7 @@ def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) 
         Initialized TTS provider.
 
     Raises:
-        SystemExit: If provider is not found or cannot be initialized.
+        TTSError: If provider is not found or cannot be initialized.
     """
     if provider_name not in PROVIDERS:
         handle_error(
@@ -115,7 +127,6 @@ def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) 
             return provider_class(api_key, **kwargs)
     except Exception as e:
         handle_error(f"Failed to initialize {provider_name} provider", ErrorType.PROVIDER_ERROR, exception=e)
-        raise  # Re-raise for type checker
 
 
 def get_provider_kwargs(
@@ -129,6 +140,9 @@ def get_provider_kwargs(
 ) -> dict[str, Any]:
     """Build provider-specific keyword arguments.
 
+    Uses each provider's ``PROVIDER_KWARGS`` declaration to select only the
+    keys that provider understands, avoiding if/elif chains.
+
     Args:
         provider: Provider name.
         stability: Voice stability for ElevenLabs.
@@ -141,30 +155,21 @@ def get_provider_kwargs(
     Returns:
         Dictionary of provider-specific kwargs.
     """
-    kwargs: dict[str, Any] = {}
-    if provider == "elevenlabs":
-        kwargs.update(
-            {
-                "stability": stability,
-                "similarity_boost": similarity_boost,
-            }
-        )
-    elif provider == "openai":
-        kwargs.update(
-            {
-                "speed": speed,
-                "response_format": response_format,
-                "instructions": instructions,
-            }
-        )
-    elif provider == "kokoro-onnx":
-        kwargs.update(
-            {
-                "speed": speed,
-                "lang": lang,
-            }
-        )
-    return kwargs
+    all_options: dict[str, Any] = {
+        "stability": stability,
+        "similarity_boost": similarity_boost,
+        "speed": speed,
+        "response_format": response_format,
+        "lang": lang,
+        "instructions": instructions,
+    }
+
+    # Look up the provider class and filter to only the keys it declares
+    provider_class = PROVIDERS.get(provider)
+    if provider_class and provider_class.PROVIDER_KWARGS:
+        return {k: v for k, v in all_options.items() if k in provider_class.PROVIDER_KWARGS}
+
+    return {}
 
 
 def handle_config_operations(create_config: bool, config_manager: ConfigManager, force: bool = False) -> bool:
@@ -184,6 +189,69 @@ def handle_config_operations(create_config: bool, config_manager: ConfigManager,
     return False
 
 
+def _validate_file_read_safety(file_path: Path) -> None:
+    """Validate that a file path is safe to read as text input.
+
+    Blocks reading of files outside the user's home directory and known safe
+    locations to prevent accidental disclosure of sensitive system files.
+
+    Args:
+        file_path: Resolved (absolute) file path to validate.
+
+    Raises:
+        TTSError: If the path points to a sensitive or disallowed location.
+    """
+    # Allowed base directories (resolved, absolute)
+    home = Path.home().resolve()
+    allowed_prefixes: list[Path] = [
+        home,
+        Path(tempfile.gettempdir()).resolve(),
+    ]
+
+    # On macOS, also allow /Users which home is already under
+    # Check if the file is under any allowed prefix
+    if not any(_is_relative_to(file_path, prefix) for prefix in allowed_prefixes):
+        handle_error(
+            f"File '{file_path}' is outside allowed directories. "
+            "Only files under your home directory or temp directory can be read.",
+            ErrorType.INVALID_INPUT,
+        )
+
+    # Block specific sensitive filename patterns regardless of location
+    sensitive_names = {
+        ".env",
+        ".env.local",
+        ".env.production",
+        ".htpasswd",
+        ".ssh",
+        "id_rsa",
+        "id_ed25519",
+        "id_ecdsa",
+    }
+    if file_path.name in sensitive_names:
+        handle_error(
+            f"File '{file_path.name}' appears to contain sensitive data and cannot be used as text input.",
+            ErrorType.INVALID_INPUT,
+        )
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    """Check if *path* is inside *parent* (Python 3.9 has Path.is_relative_to).
+
+    Args:
+        path: The path to check.
+        parent: The parent directory.
+
+    Returns:
+        True if path is relative to parent.
+    """
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
 def handle_input_operations(
     text: str | None,
     text_required: bool,
@@ -198,7 +266,7 @@ def handle_input_operations(
         Processed text or None if not applicable.
 
     Raises:
-        SystemExit: If text is required but not provided.
+        TTSError: If text is required but not provided.
     """
     if text_required and text is None:
         # Check if stdin has data
@@ -222,9 +290,12 @@ def handle_input_operations(
         if not text:
             handle_error("No input received from stdin", ErrorType.INVALID_INPUT)
     elif text and text.startswith("@"):
-        # Read from file
-        file_path = Path(text[1:])
+        # Read from file -- resolve and validate path to prevent traversal
+        file_path = Path(text[1:]).resolve()
         validate_file_path(str(file_path), must_exist=True)
+
+        # Block access to sensitive system files
+        _validate_file_read_safety(file_path)
         try:
             with open(file_path, encoding="utf-8") as f:
                 text = f.read()
@@ -381,29 +452,18 @@ def handle_dump_config(
         "temp_dir": str(temp_dir) if temp_dir else None,
     }
 
-    # Add provider-specific config
-    if provider == "elevenlabs":
-        config.update(
-            {
-                "stability": stability,
-                "similarity_boost": similarity_boost,
-            }
-        )
-    elif provider == "openai":
-        config.update(
-            {
-                "speed": speed,
-                "response_format": response_format,
-                "instructions": instructions,
-            }
-        )
-    elif provider == "kokoro-onnx":
-        config.update(
-            {
-                "speed": speed,
-                "lang": lang,
-            }
-        )
+    # Add provider-specific config using PROVIDER_KWARGS
+    all_options: dict[str, Any] = {
+        "stability": stability,
+        "similarity_boost": similarity_boost,
+        "speed": speed,
+        "response_format": response_format,
+        "lang": lang,
+        "instructions": instructions,
+    }
+    provider_kwargs = type(tts_provider).PROVIDER_KWARGS
+    if provider_kwargs:
+        config.update({k: v for k, v in all_options.items() if k in provider_kwargs})
 
     console.print("[bold cyan]Configuration:[/bold cyan]")
     console.print(Pretty(config))
@@ -470,6 +530,9 @@ def handle_speech_generation(
             instructions=instructions,
         )
 
+        # Derive audio suffix from the provider's default format
+        audio_suffix = f".{tts_provider.supported_formats[0]}" if tts_provider.supported_formats else ".mp3"
+
         audio_data = tts_provider.generate_speech(
             text=text,
             voice=voice,
@@ -505,16 +568,16 @@ def handle_speech_generation(
         else:
             if play_audio:
                 console.print("[cyan]Playing audio...[/cyan]")
-                # Generate filename with timestamp if needed
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"tts_{timestamp}.mp3"
 
                 # Create temp file in specified directory or system temp
                 if temp_dir:
                     temp_dir.mkdir(parents=True, exist_ok=True)
-                    tmp_path = temp_dir / filename
+                    with tempfile.NamedTemporaryFile(
+                        suffix=audio_suffix, prefix="tts_", dir=str(temp_dir), delete=False
+                    ) as tmp:
+                        tmp_path = Path(tmp.name)
                 else:
-                    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(suffix=audio_suffix, prefix="tts_", delete=False) as tmp:
                         tmp_path = Path(tmp.name)
 
                 tts_provider.save_audio(audio_data, tmp_path)
@@ -539,14 +602,14 @@ def handle_speech_generation(
                             console.print(f"[dim]Cleaned up temporary file: {tmp_path}[/dim]")
             else:
                 # Save without playing - always keep the file
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"tts_{timestamp}.mp3"
-
                 if temp_dir:
                     temp_dir.mkdir(parents=True, exist_ok=True)
-                    tmp_path = temp_dir / filename
+                    with tempfile.NamedTemporaryFile(
+                        suffix=audio_suffix, prefix="tts_", dir=str(temp_dir), delete=False
+                    ) as tmp:
+                        tmp_path = Path(tmp.name)
                 else:
-                    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(suffix=audio_suffix, prefix="tts_", delete=False) as tmp:
                         tmp_path = Path(tmp.name)
 
                 tts_provider.save_audio(audio_data, tmp_path)
@@ -560,7 +623,7 @@ def handle_speech_generation(
 
     except Exception as e:
         # Store debug mode for error handler
-        sys._debug_mode = debug  # type: ignore
+        set_debug_mode(debug)
         handle_error("Failed to generate speech", ErrorType.PROVIDER_ERROR, exception=e)
 
 
@@ -629,7 +692,7 @@ def main(
     ] = None,
     # Provider-specific options
     stability: Annotated[
-        float,
+        float | None,
         typer.Option(
             "-s",
             "--stability",
@@ -637,9 +700,9 @@ def main(
             min=0.0,
             max=1.0,
         ),
-    ] = 0.5,
+    ] = None,
     similarity_boost: Annotated[
-        float,
+        float | None,
         typer.Option(
             "-S",
             "--similarity",
@@ -647,9 +710,9 @@ def main(
             min=0.0,
             max=1.0,
         ),
-    ] = 0.5,
+    ] = None,
     speed: Annotated[
-        float,
+        float | None,
         typer.Option(
             "-r",
             "--speed",
@@ -657,23 +720,23 @@ def main(
             min=0.25,
             max=4.0,
         ),
-    ] = 1.0,
+    ] = None,
     response_format: Annotated[
-        str,
+        str | None,
         typer.Option(
             "-f",
             "--format",
             help="Audio format for OpenAI (mp3, opus, aac, flac, wav)",
         ),
-    ] = "mp3",
+    ] = None,
     lang: Annotated[
-        str,
+        str | None,
         typer.Option(
             "-g",
             "--lang",
             help="Language code for Kokoro ONNX (e.g., en-us)",
         ),
-    ] = "en-us",
+    ] = None,
     instructions: Annotated[
         str | None,
         typer.Option(
@@ -683,7 +746,7 @@ def main(
         ),
     ] = None,
     volume: Annotated[
-        float,
+        float | None,
         typer.Option(
             "-w",
             "--volume",
@@ -691,7 +754,7 @@ def main(
             min=0.0,
             max=5.0,
         ),
-    ] = 1.0,
+    ] = None,
     # Utility options
     debug: Annotated[
         bool,
@@ -801,14 +864,16 @@ def main(
         if not model and provider == config_file.provider:
             model = config_file.model
         output = output or (Path(config_file.output_dir) / "output.mp3" if config_file.output_dir else None)
-        response_format = response_format if response_format != "mp3" else config_file.output_format or "mp3"
+        # Use is-None checks so explicitly-passed CLI values (including defaults
+        # like --speed 1.0) are never overridden by the config file.
+        response_format = response_format if response_format is not None else (config_file.output_format or "mp3")
         keep_temp = keep_temp if keep_temp else config_file.keep_temp or False
         temp_dir = temp_dir or (Path(config_file.temp_dir) if config_file.temp_dir else None)
-        volume = volume if volume != 1.0 else config_file.volume or 1.0
-        speed = speed if speed != 1.0 else config_file.speed or 1.0
-        stability = stability if stability != 0.5 else config_file.stability or 0.5
-        similarity_boost = similarity_boost if similarity_boost != 0.5 else config_file.similarity_boost or 0.5
-        lang = lang or config_file.lang or "en-us"
+        volume = volume if volume is not None else (config_file.volume or 1.0)
+        speed = speed if speed is not None else (config_file.speed or 1.0)
+        stability = stability if stability is not None else (config_file.stability or 0.5)
+        similarity_boost = similarity_boost if similarity_boost is not None else (config_file.similarity_boost or 0.5)
+        lang = lang if lang is not None else (config_file.lang or "en-us")
         # CLI default is True. `--no-play` flips it to False — respect that explicit
         # override. Only fall through to the config value when the CLI value is still
         # the default (True); we cannot distinguish "user typed --play" from "user
@@ -817,12 +882,26 @@ def main(
             play_audio = config_file.play_audio
         debug = debug or config_file.debug or False
 
+    # Apply hardcoded defaults for any values still unset (no CLI arg, no config).
+    if response_format is None:
+        response_format = "mp3"
+    if volume is None:
+        volume = 1.0
+    if speed is None:
+        speed = 1.0
+    if stability is None:
+        stability = 0.5
+    if similarity_boost is None:
+        similarity_boost = 0.5
+    if lang is None:
+        lang = "en-us"
+
     # Apply default provider if still not set
     if not provider:
         provider = DEFAULT_PROVIDER
 
     # Store debug mode globally for error handler
-    sys._debug_mode = debug  # type: ignore
+    set_debug_mode(debug)
 
     # Check if text is required (not needed for certain operations)
     text_required = not (
@@ -944,7 +1023,25 @@ def main(
             "Model": model or "default",
         }
 
-        env_vars = {k: os.environ[k] for k in os.environ if "API" in k or "KEY" in k or "TOKEN" in k or "TTS" in k}
+        # Only collect known TTS-related environment variables (not a broad scan)
+        _known_env_vars = [
+            "ELEVENLABS_API_KEY",
+            "OPENAI_API_KEY",
+            "DEEPGRAM_API_KEY",
+            "DG_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "TTS_PROVIDER",
+            "TTS_VOICE_ID",
+            "ELEVENLABS_VOICE_ID",
+            "OPENAI_VOICE_ID",
+            "KOKORO_VOICE_ID",
+            "DEEPGRAM_VOICE_ID",
+            "GEMINI_VOICE_ID",
+            "KOKORO_MODEL_PATH",
+            "KOKORO_VOICE_PATH",
+        ]
+        env_vars = {k: os.environ[k] for k in _known_env_vars if k in os.environ}
         sanitized_env = sanitize_debug_output(env_vars)
 
         console.print("[bold cyan]Debug Information:[/bold cyan]")
@@ -965,7 +1062,6 @@ def main(
     # Handle speech generation
     if not text:
         handle_error("No text provided for speech generation", ErrorType.INVALID_INPUT)
-        return
 
     handle_speech_generation(
         text=text,
@@ -989,4 +1085,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    _run_cli()

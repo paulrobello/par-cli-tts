@@ -5,26 +5,14 @@ import pytest
 
 def test_top_level_imports():
     """All public names should be importable from par_tts."""
-    from par_tts import (
-        TTSProvider,
-        Voice,
-        SpeechResult,
-        ElevenLabsOptions,
-        OpenAIOptions,
-        KokoroOptions,
-        DeepgramOptions,
-        GeminiOptions,
-        PROVIDERS,
-        get_provider,
-        list_providers,
-    )
+    import par_tts
 
-    assert isinstance(PROVIDERS, dict)
-    assert "elevenlabs" in PROVIDERS
-    assert "openai" in PROVIDERS
-    assert "kokoro-onnx" in PROVIDERS
-    assert "deepgram" in PROVIDERS
-    assert "gemini" in PROVIDERS
+    assert isinstance(par_tts.PROVIDERS, dict)
+    assert "elevenlabs" in par_tts.PROVIDERS
+    assert "openai" in par_tts.PROVIDERS
+    assert "kokoro-onnx" in par_tts.PROVIDERS
+    assert "deepgram" in par_tts.PROVIDERS
+    assert "gemini" in par_tts.PROVIDERS
 
 
 def test_get_provider_factory():
@@ -63,15 +51,27 @@ def test_provider_imports():
         OpenAIProvider,
     )
 
+    assert DeepgramProvider is not None
+    assert ElevenLabsProvider is not None
+    assert GeminiProvider is not None
+    assert KokoroONNXProvider is not None
+    assert OpenAIProvider is not None
+
 
 def test_audio_module_importable():
     """Audio playback utilities should be importable."""
     from par_tts.audio import play_audio_bytes, play_audio_with_player
 
+    assert play_audio_bytes is not None
+    assert play_audio_with_player is not None
+
 
 def test_utils_module_importable():
     """Utility functions should be importable."""
     from par_tts.utils import looks_like_voice_id, stream_to_file
+
+    assert looks_like_voice_id is not None
+    assert stream_to_file is not None
 
 
 def test_compat_shim_par_cli_tts():

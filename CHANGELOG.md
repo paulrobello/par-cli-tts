@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-04-25
+
+### Fixed
+
+- **SEC-001** Enable SSL certificate verification by default in HTTP client factory
+- **SEC-002** Remove insecure SSL context from model downloader
+- **SEC-003** Set restrictive permissions (0600) on config file creation and load
+- **SEC-004** Fix PowerShell command injection in Windows audio playback
+- **SEC-005** Remove global opener installation from model downloader
+- **SEC-006** Add path traversal validation for @-file input
+- **SEC-007** Use tempfile.NamedTemporaryFile instead of predictable temp file names
+- **SEC-008** Set 0600 permissions on downloaded model temp files
+- **SEC-009** Sanitize API keys from Gemini error messages
+- **SEC-010** Replace broad env var scan with explicit allowlist in debug mode
+- **SEC-011** Add HMAC-SHA256 integrity verification to voice cache
+- **SEC-012** Add upper-bound version pins to all runtime dependencies
+- **SEC-013** Canonicalize file paths before validation
+- **ARC-001** Remove sys.exit() from library code — raise TTSError instead
+- **ARC-004** Move provider-specific option declarations into provider classes
+- **ARC-005** Remove dead `par_tts/cli/config.py` module
+- **ARC-006** Replace sys._debug_mode monkey-patching with ContextVar
+- **ARC-007** Lazy-load ElevenLabs SDK import in voice_cache module
+- **ARC-008** Add api_key parameter to KokoroONNXProvider for base class compatibility
+- **ARC-009** Document intentional empty GeminiOptions dataclass
+- **ARC-010** Replace Kokoro temp file round-trip with io.BytesIO
+- **ARC-011** Add push/PR CI triggers alongside existing manual workflow
+- **ARC-012** Derive audio format suffix from active provider's supported_formats
+- **ARC-014** Move inline base64 imports to module level in voice_cache
+- **ARC-015** Replace fragile regex with str.replace() in Claude style installer
+- **ARC-016** Align ruff target-version with pyproject.toml Python minimum
+- **ARC-017** Add .claude/ local settings to .gitignore
+- **QA-001** Consolidate play_audio/save_audio into TTSProvider base class
+- **QA-002** Remove unused wrap_provider_error decorator
+- **QA-003** Remove unused write_with_stream function
+- **QA-004** Remove unused SpeechResult dataclass from public API
+- **QA-005** Add dict[str, Any] return type to get_model_info()
+- **QA-006** Fix 31 ruff lint errors in test files
+- **QA-008** Use pytest.raises(ValidationError) instead of Exception in tests
+- **QA-010** Replace hardcoded username with template variable in Claude style installer
+- **QA-012** Use None/sentinel pattern for Typer defaults to prevent config override
+- **QA-013** Remove unused self.config from TTSProvider base class
+- **QA-015** Add shutil.which("vlc") for VLC path detection on Windows
+
+### Changed
+
+- **ARC-003** Add v0.7.0 removal timeline for par_cli_tts compat shim
+- **DOC-001** Update all ARCHITECTURE.md file paths from par_cli_tts to par_tts
+- **DOC-002** Add Deepgram and Gemini providers to all architecture diagrams
+- **DOC-003** Update all CLAUDE.md file paths from par_cli_tts to par_tts
+- **DOC-005** Version CHANGELOG [Unreleased] as [0.5.0]
+- **DOC-006** Standardize README cache command to make update-cache
+- **DOC-007** Add docstrings to public functions in errors.py
+- **DOC-008** Add docstrings to Deepgram and Gemini provider methods
+- **DOC-009** Fix project name in DOCUMENTATION_STYLE_GUIDE.md
+- **DOC-010** Update roadmap dates and add v0.5.0 section to ARCHITECTURE.md
+- **DOC-012** Condense README What's New to summary + CHANGELOG link
+- **DOC-013** Replace hardcoded version badge with dynamic PyPI badge
+- **DOC-014** Add CHANGELOG cross-reference in ARCHITECTURE.md
+- **DOC-015** Add Attributes section to Voice dataclass
+
+### Added
+
+- **DOC-004** Create CONTRIBUTING.md with dev setup, conventions, and PR process
+- **DOC-011** Create SECURITY.md with vulnerability reporting policy
+
+## [0.5.0] - 2025-04-25
+
 ### Added
 
 - **Library API surface** — `par_tts` is now a proper importable Python library:

@@ -1,7 +1,5 @@
 """Tests for utility functions."""
 
-from pathlib import Path
-
 from par_tts.utils import (
     calculate_file_checksum,
     looks_like_voice_id,

@@ -9,10 +9,8 @@ explicitly different from the default.
 
 import logging
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
-from par_tts.audio import play_audio_bytes
 from par_tts.defaults import DEFAULT_DEEPGRAM_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
@@ -242,6 +240,12 @@ class DeepgramProvider(TTSProvider):
         return _stream()
 
     def list_voices(self) -> list[Voice]:
+        """Return all available Deepgram Aura and Aura-2 voices.
+
+        Returns:
+            List of Voice objects with id, name, labels, and category
+            populated from the built-in voice catalog.
+        """
         return [
             Voice(
                 id=voice_id,
@@ -291,17 +295,3 @@ class DeepgramProvider(TTSProvider):
             raise ValueError(f"Voice '{voice_identifier}' is ambiguous. Matches: {', '.join(sorted(prefix_matches))}")
 
         raise ValueError(f"Voice '{voice_identifier}' not found. Use --list to see available Deepgram voices.")
-
-    def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
-        path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(audio_data, bytes):
-            path.write_bytes(audio_data)
-        else:
-            self.stream_to_file(audio_data, path)
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        if not isinstance(audio_data, bytes):
-            audio_data = b"".join(audio_data)
-        # Default container is mp3 unless caller overrode response_format.
-        play_audio_bytes(audio_data, volume=volume, suffix=".mp3")

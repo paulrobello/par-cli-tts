@@ -17,7 +17,7 @@ This document provides a comprehensive overview of the PAR CLI TTS system archit
 
 ## System Overview
 
-PAR CLI TTS is a command-line text-to-speech tool that provides a unified interface for multiple TTS providers including cloud-based (ElevenLabs, OpenAI) and offline (Kokoro ONNX) solutions. The architecture follows a provider abstraction pattern, enabling seamless integration of different TTS services while maintaining a consistent user experience.
+PAR CLI TTS is a command-line text-to-speech tool that provides a unified interface for multiple TTS providers including cloud-based (ElevenLabs, OpenAI, Deepgram, Google Gemini) and offline (Kokoro ONNX) solutions. The architecture follows a provider abstraction pattern, enabling seamless integration of different TTS services while maintaining a consistent user experience.
 
 ### High-Level Architecture
 
@@ -47,6 +47,8 @@ graph TB
         EL[ElevenLabsProvider]
         OA[OpenAIProvider]
         KO[KokoroONNXProvider]
+        DG[DeepgramProvider]
+        GM[GeminiProvider]
         FP[Future Providers<br/>...]
     end
 
@@ -54,6 +56,8 @@ graph TB
         ELAPI[ElevenLabs API]
         OAAPI[OpenAI API]
         ONNX[ONNX Runtime<br/>Local]
+        DGAPI[Deepgram API]
+        GMAPI[Gemini API]
         FAPI[Future APIs<br/>...]
     end
 
@@ -77,6 +81,8 @@ graph TB
     BASE --> EL
     BASE --> OA
     BASE --> KO
+    BASE --> DG
+    BASE --> GM
     BASE --> FP
     EL --> VC
     EL --> ELAPI
@@ -85,12 +91,18 @@ graph TB
     OA --> HTTP
     KO --> MD
     KO --> ONNX
+    DG --> DGAPI
+    DG --> HTTP
+    GM --> GMAPI
+    GM --> HTTP
     FP --> FAPI
     VC --> CACHE
     MD --> MODELS
     EL --> AUDIO
     OA --> AUDIO
     KO --> AUDIO
+    DG --> AUDIO
+    GM --> AUDIO
     ERR --> CONS
 
     style CLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
@@ -110,10 +122,14 @@ graph TB
     style EL fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style OA fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style KO fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style DG fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style GM fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style FP fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style ELAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style OAAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style ONNX fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style DGAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style GMAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style FAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style CACHE fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style MODELS fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -135,7 +151,7 @@ graph TB
 
 ### Core Components
 
-#### 1. CLI Interface (`par_cli_tts/tts_cli.py`)
+#### 1. CLI Interface (`par_tts/tts_cli.py`)
 
 The main entry point that handles:
 - Command-line argument parsing using Typer with short flags
@@ -156,7 +172,7 @@ The main entry point that handles:
   - Updates `~/.claude/settings.json` with required permissions
   - Prompts for user name to personalize audio summaries
 
-#### 2. Provider Abstraction (`par_cli_tts/providers/base.py`)
+#### 2. Provider Abstraction (`par_tts/providers/base.py`)
 
 Abstract base class defining the provider interface:
 - Speech generation with Iterator[bytes] support
@@ -168,7 +184,7 @@ Abstract base class defining the provider interface:
 
 #### 3. Provider Implementations
 
-**ElevenLabs Provider (`par_cli_tts/providers/elevenlabs.py`)**
+**ElevenLabs Provider (`par_tts/providers/elevenlabs.py`)**
 - Voice caching support with change detection
 - Advanced voice settings (stability, similarity boost)
 - Streaming audio generation (Iterator[bytes])
@@ -177,7 +193,7 @@ Abstract base class defining the provider interface:
 - Default voice: Juniper
 - Supported formats: mp3, pcm, ulaw
 
-**OpenAI Provider (`par_cli_tts/providers/openai.py`)**
+**OpenAI Provider (`par_tts/providers/openai.py`)**
 - Multiple audio formats (mp3, opus, aac, flac, wav, pcm)
 - Variable speech speed (0.25 to 4.0)
 - 13 voice options (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar)
@@ -186,7 +202,7 @@ Abstract base class defining the provider interface:
 - Default model: gpt-4o-mini-tts
 - Default voice: nova
 
-**Kokoro ONNX Provider (`par_cli_tts/providers/kokoro_onnx.py`)**
+**Kokoro ONNX Provider (`par_tts/providers/kokoro_onnx.py`)**
 - Offline TTS using ONNX Runtime (no API key required)
 - Automatic model downloading with SHA256 verification
 - XDG-compliant model storage (~106 MB download)
@@ -196,7 +212,24 @@ Abstract base class defining the provider interface:
 - Multiple output formats (wav, flac, ogg)
 - Default voice: af_sarah
 
-#### 4. Voice Cache System (`par_cli_tts/voice_cache.py`)
+**Deepgram Provider (`par_tts/providers/deepgram.py`)**
+- REST `/v1/speak` integration via httpx (no SDK dependency)
+- Aura and Aura-2 voice catalog (English, Spanish, Dutch, French, German, Italian, Japanese)
+- Streaming chunked download — audio writes to file as it arrives
+- Voice resolution accepts full ID, ID prefix, or speaker name
+- Default model/voice: aura-2-thalia-en
+- Supported formats: mp3, wav, flac, opus, aac
+
+**Gemini Provider (`par_tts/providers/gemini.py`)**
+- REST `generateContent` with `responseModalities: ["AUDIO"]` via httpx (no SDK dependency)
+- 30 prebuilt voices with style descriptors (Zephyr, Puck, Kore, Aoede, etc.)
+- Raw 24 kHz 16-bit mono PCM wrapped in WAV header
+- Case-insensitive voice name resolution with partial matching
+- Default model: gemini-2.5-flash-preview-tts
+- Default voice: Kore
+- Supported formats: wav
+
+#### 4. Voice Cache System (`par_tts/voice_cache.py`)
 
 Intelligent caching layer for voice data:
 - XDG-compliant storage
@@ -207,7 +240,7 @@ Intelligent caching layer for voice data:
 - Manual cache refresh (--refresh-cache)
 - Sample cache management (--clear-cache-samples)
 
-#### 5. Model Downloader (`par_cli_tts/model_downloader.py`)
+#### 5. Model Downloader (`par_tts/model_downloader.py`)
 
 Automatic model management for offline providers:
 - XDG-compliant data storage
@@ -217,7 +250,7 @@ Automatic model management for offline providers:
 - Model verification and cleanup
 - ~106 MB total download size for Kokoro ONNX
 
-#### 6. Utility Functions (`par_cli_tts/utils.py`)
+#### 6. Utility Functions (`par_tts/utils.py`)
 
 Common utilities for the application:
 - `stream_to_file()`: Memory-efficient streaming
@@ -232,7 +265,7 @@ Common utilities for the application:
 - `_play_audio_windows()`: Windows-specific audio playback
 - `play_audio_bytes()`: Play audio from bytes using system player
 
-#### 7. Configuration File Manager (`par_cli_tts/config_file.py`)
+#### 7. Configuration File Manager (`par_tts/config_file.py`)
 
 YAML-based configuration file support:
 - `ConfigFile`: Pydantic model for config structure with validation
@@ -243,7 +276,7 @@ YAML-based configuration file support:
 - CLI argument precedence over config file
 - Configuration schema validation with Pydantic (rejects unknown providers in `voices:`)
 
-#### 8. Error Handling Module (`par_cli_tts/errors.py`)
+#### 8. Error Handling Module (`par_tts/errors.py`)
 
 Centralized error management:
 - `ErrorType`: Enum for categorized exit codes (User: 1, System: 2, File: 3, Config: 4)
@@ -254,7 +287,7 @@ Centralized error management:
 - `wrap_provider_error()`: Decorator for consistent provider error handling
 - Debug mode support with detailed stack traces
 
-#### 9. Default Values (`par_cli_tts/defaults.py`)
+#### 9. Default Values (`par_tts/defaults.py`)
 
 Centralized default configuration values:
 - `DEFAULT_PROVIDER`: kokoro-onnx
@@ -263,7 +296,7 @@ Centralized default configuration values:
 - `DEFAULT_KOKORO_VOICE`: af_sarah
 - `get_default_voice()`: Get default voice for a provider (checks env vars first)
 
-#### 10. Configuration Dataclasses (`par_cli_tts/config.py`)
+#### 10. Configuration Dataclasses (`par_tts/config.py`)
 
 Structured configuration dataclasses for internal use:
 - `AudioSettings`: Format, speed, stability, similarity, lang settings
@@ -272,20 +305,20 @@ Structured configuration dataclasses for internal use:
 - `TTSConfig`: Complete configuration combining all settings
 - `get_provider_kwargs()`: Extract provider-specific kwargs from config
 
-#### 11. Console Output (`par_cli_tts/console.py`)
+#### 11. Console Output (`par_tts/console.py`)
 
 Shared console instances for consistent output:
 - `console`: Standard output Console instance (stdout)
 - `error_console`: Error output Console instance (stderr)
 
-#### 12. HTTP Client Factory (`par_cli_tts/http_client.py`)
+#### 12. HTTP Client Factory (`par_tts/http_client.py`)
 
 HTTP client creation with consistent configuration:
 - `create_http_client()`: Factory function for httpx.Client
 - Configurable timeout (default: 10 seconds)
 - SSL verification options
 
-#### 13. Kokoro Model CLI (`par_cli_tts/kokoro_cli.py`)
+#### 13. Kokoro Model CLI (`par_tts/kokoro_cli.py`)
 
 Dedicated CLI for Kokoro ONNX model management:
 - `download`: Download model files with --force option
@@ -404,6 +437,22 @@ classDiagram
         -auto_download_models()
     }
 
+    class DeepgramProvider {
+        +client: httpx.Client
+        +VOICE_IDS: frozenset
+        +generate_speech(text, voice, model, response_format)
+        +list_voices()
+        +resolve_voice(identifier)
+    }
+
+    class GeminiProvider {
+        +client: httpx.Client
+        +VOICE_NAMES: frozenset
+        +generate_speech(text, voice, model)
+        +list_voices()
+        +resolve_voice(identifier)
+    }
+
     class ModelDownloader {
         +data_dir: Path
         +MODELS: dict
@@ -429,12 +478,16 @@ classDiagram
     TTSProvider <|-- ElevenLabsProvider
     TTSProvider <|-- OpenAIProvider
     TTSProvider <|-- KokoroONNXProvider
+    TTSProvider <|-- DeepgramProvider
+    TTSProvider <|-- GeminiProvider
     TTSProvider ..> Voice : uses
     ElevenLabsProvider --> VoiceCache : uses
     KokoroONNXProvider --> ModelDownloader : uses
     ElevenLabsProvider --> Voice : creates
     OpenAIProvider --> Voice : creates
     KokoroONNXProvider --> Voice : creates
+    DeepgramProvider --> Voice : creates
+    GeminiProvider --> Voice : creates
 
     style TTSProvider fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Voice fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -447,13 +500,15 @@ classDiagram
 
 ### Provider Registration
 
-Providers are registered in a central registry (`par_cli_tts/providers/__init__.py`):
+Providers are registered in a central registry (`par_tts/providers/__init__.py`):
 
 ```python
 PROVIDERS = {
     "elevenlabs": ElevenLabsProvider,
     "openai": OpenAIProvider,
     "kokoro-onnx": KokoroONNXProvider,
+    "deepgram": DeepgramProvider,
+    "gemini": GeminiProvider,
     # Future providers added here
 }
 ```
@@ -477,10 +532,14 @@ flowchart TD
     SelectProvider -->|ElevenLabs| CreateEL[Create ElevenLabs Provider]
     SelectProvider -->|OpenAI| CreateOA[Create OpenAI Provider]
     SelectProvider -->|Kokoro ONNX| CreateKO[Create Kokoro ONNX Provider]
+    SelectProvider -->|Deepgram| CreateDG[Create Deepgram Provider]
+    SelectProvider -->|Gemini| CreateGM[Create Gemini Provider]
 
     CreateEL --> ResolveVoiceEL[Resolve Voice with Cache]
     CreateOA --> ResolveVoiceOA[Resolve Voice Direct]
     CreateKO --> ResolveVoiceKO[Resolve Voice Local]
+    CreateDG --> ResolveVoiceDG[Resolve Voice Name/ID]
+    CreateGM --> ResolveVoiceGM[Resolve Voice Name]
 
     ResolveVoiceEL --> CheckCache{Cache Valid?}
     CheckCache -->|No| FetchVoices[Fetch from API]
@@ -490,6 +549,8 @@ flowchart TD
 
     ResolveVoiceOA --> UseVoice
     ResolveVoiceKO --> UseVoice
+    ResolveVoiceDG --> UseVoice
+    ResolveVoiceGM --> UseVoice
 
     UseVoice --> GenerateTTS[Generate TTS]
     GenerateTTS --> ReceiveAudio[Receive Audio Data]
@@ -520,9 +581,13 @@ flowchart TD
     style CreateEL fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style CreateOA fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style CreateKO fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style CreateDG fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style CreateGM fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style ResolveVoiceEL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style ResolveVoiceOA fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style ResolveVoiceKO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style ResolveVoiceDG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style ResolveVoiceGM fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CheckCache fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style FetchVoices fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style UpdateCache fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -894,6 +959,8 @@ graph TD
 |----------|-------------|---------|----------|
 | `ELEVENLABS_API_KEY` | ElevenLabs API authentication | - | Yes* |
 | `OPENAI_API_KEY` | OpenAI API authentication | - | Yes* |
+| `DEEPGRAM_API_KEY` | Deepgram API authentication (`DG_API_KEY` also accepted) | - | Yes* |
+| `GEMINI_API_KEY` | Gemini API authentication (`GOOGLE_API_KEY` also accepted) | - | Yes* |
 | `KOKORO_MODEL_PATH` | Path to Kokoro ONNX model file | Auto-download | No |
 | `KOKORO_VOICE_PATH` | Path to Kokoro voice embeddings | Auto-download | No |
 | `TTS_PROVIDER` | Default TTS provider | `kokoro-onnx` | No |
@@ -901,6 +968,8 @@ graph TD
 | `ELEVENLABS_VOICE_ID` | Default ElevenLabs voice | `Juniper` | No |
 | `OPENAI_VOICE_ID` | Default OpenAI voice | `nova` | No |
 | `KOKORO_VOICE_ID` | Default Kokoro ONNX voice | `af_sarah` | No |
+| `DEEPGRAM_VOICE_ID` | Default Deepgram voice | `aura-2-thalia-en` | No |
+| `GEMINI_VOICE_ID` | Default Gemini voice | `Kore` | No |
 
 *At least one API key is required for cloud providers (Kokoro ONNX works offline without API keys)
 
@@ -1068,9 +1137,9 @@ flowchart TD
 ### Provider Template
 
 ```python
-# par_cli_tts/providers/new_provider.py
+# par_tts/providers/new_provider.py
 from typing import Any
-from par_cli_tts.providers.base import TTSProvider, Voice
+from par_tts.providers.base import TTSProvider, Voice
 
 class NewProvider(TTSProvider):
     """New TTS provider implementation."""
@@ -1419,27 +1488,43 @@ gantt
     dateFormat YYYY-MM-DD
 
     section Core Features
-    Async Operations           :2024-06-01, 30d
-    Batch Processing           :2024-07-01, 20d
-    Progress Indicators        :2024-07-15, 15d
+    Async Operations           :2026-06-01, 30d
+    Batch Processing           :2026-07-01, 20d
+    Progress Indicators        :2026-07-15, 15d
 
     section Provider Support
-    Google Cloud TTS           :2024-08-01, 25d
-    Amazon Polly              :2024-09-01, 25d
-    Azure Speech Services     :2024-10-01, 25d
+    Amazon Polly              :2026-08-01, 25d
+    Azure Speech Services     :2026-09-01, 25d
+    Google Cloud TTS          :2026-10-01, 25d
 
     section Advanced Features
-    Voice Cloning Support     :2024-11-01, 30d
-    SSML Support             :2024-12-01, 20d
-    Real-time Streaming      :2025-01-01, 30d
+    Voice Cloning Support     :2026-11-01, 30d
+    SSML Support             :2026-12-01, 20d
+    Real-time Streaming      :2027-01-01, 30d
 
     section Performance
-    Parallel Generation      :2024-08-15, 20d
-    Advanced Caching        :2024-09-15, 15d
-    CDN Integration         :2024-10-15, 20d
+    Parallel Generation      :2026-08-15, 20d
+    Advanced Caching        :2026-09-15, 15d
+    CDN Integration         :2026-10-15, 20d
 ```
 
 ### Recent Improvements
+
+#### v0.5.0
+
+1. **Library API Surface**: `par_tts` is now a proper importable Python library with `get_provider()`, `list_providers()`, and typed options
+2. **Import Package Renamed**: Canonical import is now `par_tts` (old `par_cli_tts` still works with deprecation warning)
+3. **Decoupled from Rich**: Library modules use stdlib logging instead of Rich console
+4. **Deepgram TTS Provider**: REST `/v1/speak` integration with full Aura/Aura-2 voice catalog
+5. **Google Gemini TTS Provider**: `generateContent` audio modality with 30 prebuilt voices
+6. **Per-Provider Voice Configuration**: New `voices:` mapping prevents voice bleed across providers
+7. **Audio Playback Extracted**: Dedicated `par_tts.audio` module for library use
+
+#### v0.4.2
+
+1. **Config File Provider Setting**: Provider from config file now correctly overrides default
+2. **API Keys in Config File**: API keys can now be stored in config file
+3. **ElevenLabs Audio Playback**: Fixed volume control and iterator consumption
 
 #### v0.4.0
 
@@ -1491,6 +1576,7 @@ This architecture positions PAR CLI TTS for future growth while maintaining stab
 ## Related Documentation
 
 - [README.md](../README.md) - Project overview and installation guide
+- [CHANGELOG.md](../CHANGELOG.md) - Version history and release notes
 - [CLAUDE.md](../CLAUDE.md) - Development guide and code conventions
 - [DOCUMENTATION_STYLE_GUIDE.md](DOCUMENTATION_STYLE_GUIDE.md) - Documentation standards for this project
 - [pyproject.toml](../pyproject.toml) - Project configuration and dependencies

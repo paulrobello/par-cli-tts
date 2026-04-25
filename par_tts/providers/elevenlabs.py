@@ -11,7 +11,6 @@ with warnings.catch_warnings():
     from elevenlabs.client import ElevenLabs
     from elevenlabs.play import save
 
-from par_tts.audio import play_audio_bytes
 from par_tts.defaults import DEFAULT_ELEVENLABS_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
@@ -20,6 +19,11 @@ from par_tts.voice_cache import VoiceCache, resolve_voice_identifier
 
 class ElevenLabsProvider(TTSProvider):
     """ElevenLabs TTS provider."""
+
+    PROVIDER_KWARGS = {
+        "stability": 0.5,
+        "similarity_boost": 0.5,
+    }
 
     def __init__(self, api_key: str, **kwargs: Any):
         """
@@ -151,17 +155,3 @@ class ElevenLabsProvider(TTSProvider):
         else:
             # For iterators, use the stream_to_file method
             self.stream_to_file(audio_data, file_path)
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        """
-        Play audio data with volume control.
-
-        Args:
-            audio_data: Audio data to play.
-            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
-        """
-        # Convert iterator to bytes if needed
-        if not isinstance(audio_data, bytes):
-            audio_data = b"".join(audio_data)
-
-        play_audio_bytes(audio_data, volume=volume, suffix=".mp3")

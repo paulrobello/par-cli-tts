@@ -1,13 +1,10 @@
 """OpenAI TTS provider implementation."""
 
 import logging
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any, Literal
 
 from openai import OpenAI
 
-from par_tts.audio import play_audio_bytes
 from par_tts.defaults import DEFAULT_OPENAI_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
@@ -17,6 +14,12 @@ _logger = logging.getLogger(__name__)
 
 class OpenAIProvider(TTSProvider):
     """OpenAI TTS provider."""
+
+    PROVIDER_KWARGS = {
+        "speed": 1.0,
+        "response_format": "mp3",
+        "instructions": None,
+    }
 
     # Available voices for OpenAI TTS
     # tts-1/tts-1-hd support: alloy, ash, coral, echo, fable, onyx, nova, sage, shimmer
@@ -175,29 +178,3 @@ class OpenAIProvider(TTSProvider):
         # If no match found, show available voices
         available = ", ".join(self.VOICES.keys())
         raise ValueError(f"Voice '{voice_identifier}' not found. Available voices: {available}")
-
-    def save_audio(self, audio_data: bytes, file_path: str | Path) -> None:
-        """
-        Save audio data to a file.
-
-        Args:
-            audio_data: Audio data to save.
-            file_path: Path to save the audio file.
-        """
-        path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(audio_data)
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        """
-        Play audio data with volume control.
-
-        Args:
-            audio_data: Audio data to play (bytes or iterator).
-            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
-        """
-        # Convert iterator to bytes if needed
-        if not isinstance(audio_data, bytes):
-            audio_data = b"".join(audio_data)
-
-        play_audio_bytes(audio_data, volume=volume, suffix=".mp3")

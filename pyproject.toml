@@ -43,16 +43,16 @@ keywords = [
     "library",
 ]
 dependencies = [
-    "httpx>=0.28.1",
-    "elevenlabs>=2.44.0",
-    "python-dotenv>=1.2.2",
-    "typer>=0.24.2",
-    "rich>=15.0.0",
-    "platformdirs>=4.9.6",
-    "pyyaml>=6.0.3",
-    "openai>=2.32.0",
-    "kokoro-onnx>=0.5.0",
-    "soundfile>=0.13.1",
+    "httpx>=0.28.1,<1.0",
+    "elevenlabs>=2.44.0,<3.0",
+    "python-dotenv>=1.2.2,<2.0",
+    "typer>=0.24.2,<1.0",
+    "rich>=15.0.0,<20.0",
+    "platformdirs>=4.9.6,<5.0",
+    "pyyaml>=6.0.3,<7.0",
+    "openai>=2.32.0,<3.0",
+    "kokoro-onnx>=0.5.0,<1.0",
+    "soundfile>=0.13.1,<1.0",
 ]
 
 [project.license]
@@ -67,7 +67,7 @@ Discussions = "https://github.com/paulrobello/par-cli-tts/discussions"
 Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
 
 [project.scripts]
-par-tts = "par_tts.cli.tts_cli:app"
+par-tts = "par_tts.cli.tts_cli:_run_cli"
 par-tts-kokoro = "par_tts.cli.kokoro_cli:app"
 par-tts-install-style = "par_tts.cli.install_claude_style:app"
 

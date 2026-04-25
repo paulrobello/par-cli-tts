@@ -5,7 +5,7 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.5.0-green.svg)
+![Version](https://img.shields.io/pypi/v/par-cli-tts.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
 A text-to-speech library and command-line tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini) with intelligent voice caching, name resolution, and flexible output options.
@@ -43,80 +43,18 @@ A text-to-speech library and command-line tool supporting multiple TTS providers
 
 ## What's New
 
-### v0.5.0
-- **Library API surface** — `import par_tts` is now a proper Python library with
+### v0.5.0 (Latest)
+- **Library API surface** -- `import par_tts` is now a proper Python library with
   `get_provider()`, `list_providers()`, typed per-provider options, and `SpeechResult`.
   See [Library Usage](#library-usage) for examples.
-- **Import package renamed** — canonical import is now `par_tts` (was `par_cli_tts`).
+- **Import package renamed** -- canonical import is now `par_tts` (was `par_cli_tts`).
   Old imports still work with a deprecation warning.
-- **Decoupled from Rich** — library modules use `stdlib logging` instead of Rich
+- **Decoupled from Rich** -- library modules use `stdlib logging` instead of Rich
   console, enabling headless/embedded use without Rich installed.
-- **Audio playback extracted** — `play_audio_bytes` and `play_audio_with_player`
+- **Audio playback extracted** -- `play_audio_bytes` and `play_audio_with_player`
   moved to dedicated `par_tts.audio` module.
 
-### v0.4.2
-- **Google Gemini TTS provider** - Added `-P gemini` with all 30 prebuilt voices
-  (Zephyr, Puck, Kore, Aoede, …) via the `generateContent` audio modality. The
-  API returns raw 24 kHz 16-bit mono PCM; the provider wraps it in a WAV header
-  so output is a self-contained `.wav`. API key sources, in order:
-  `gemini_api_key` in config, `GEMINI_API_KEY` env, or `GOOGLE_API_KEY` env.
-- **Deepgram TTS provider** - Added `-P deepgram` with full Aura and Aura-2 voice
-  catalog (English, Spanish, Dutch, French, German, Italian, Japanese). Voice
-  resolution accepts the full ID (`aura-2-thalia-en`), an ID prefix
-  (`aura-2-thalia`), or just the speaker name (`thalia`). API key sources, in
-  order: `deepgram_api_key` in config, then `DEEPGRAM_API_KEY` or `DG_API_KEY`
-  env vars.
-- **Per-provider voice configuration** - New `voices:` mapping in `config.yaml`
-  keyed by provider name; switching providers with `-P` no longer inherits a
-  voice ID belonging to a different provider.
-- **`-y` / `--yes` flag and `--create-config` overwrite confirmation** -
-  `--create-config` now prompts before clobbering an existing config; pass `-y`
-  to skip the prompt.
-- **`--no-play` is now respected** - the config-merge expression that was
-  silently coercing it back to `True` has been fixed.
-
-### v0.4.1
-- **Claude Code output style installer** - New `install-claude-style` command to automatically set up TTS audio summaries
-- **Bundled output style** - TTS Summary output style included with the package
-
-### v0.4.0
-- **OpenAI gpt-4o-mini-tts** - New steerable TTS model with `--instructions` option
-- **7 new OpenAI voices** - ash, ballad, coral, sage, verse, marin, cedar (13 total)
-- **ElevenLabs model updated** - Changed from deprecated `eleven_monolingual_v1` to `eleven_multilingual_v2`
-- **Kokoro ONNX 0.5.0** - Updated to latest version
-
-### v0.3.0
-- Major code refactoring with better modularity and code organization
-- New utility modules for shared console, defaults, and HTTP client
-- Test suite with 46 tests for better reliability
-- Documentation synced to match current implementation
-
-### v0.2.2
-- Updated all HTTP requests and downloaders to ignore SSL certificate errors
-- Improves compatibility with corporate proxies and development environments
-
-### v0.2.1
-- Updated dependencies
-- Ensured Python 3.13 compatibility
-
-### v0.2.0
-
-**Major Update**: Configuration files, smarter caching, consistent error handling, and more!
-
-### New Features
-- **Configuration File Support** - Set defaults in `~/.config/par-tts/config.yaml`
-- **Smarter Voice Cache** - Change detection, manual refresh, and voice sample caching
-- **Consistent Error Handling** - Clear error messages with proper exit codes
-- **Multiple Input Methods** - Direct text, stdin piping, and file input (`@filename`)
-- **Volume Control** - Adjust playback volume (0.0 to 5.0) across all platforms (macOS, Linux, Windows)
-- **Voice Preview** - Test voices with sample text before using
-
-### Improvements
-- **Enhanced Security** - API key sanitization in debug output
-- **Memory Efficiency** - Stream audio directly to files without buffering
-- **Model Verification** - SHA256 checksum verification for downloads
-- **Better CLI** - All options now have short versions for quick access
-- **Cache Management** - New commands for cache refresh and cleanup
+For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
@@ -725,7 +663,7 @@ par-tts --refresh-cache --provider elevenlabs
 par-tts --clear-cache-samples --provider elevenlabs
 
 # Or use Makefile commands
-make refresh-cache   # Force refresh voice cache
+make update-cache    # Force refresh voice cache
 make clear-cache     # Clear voice cache including samples
 ```
 

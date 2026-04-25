@@ -69,7 +69,7 @@ make publish
 
 The codebase uses an abstract base class pattern for TTS providers to enable multiple implementations:
 
-1. **Base Provider (`par_cli_tts/providers/base.py`)**:
+1. **Base Provider (`par_tts/providers/base.py`)**:
    - Defines `TTSProvider` abstract class with required methods
    - All providers must implement: `generate_speech()`, `list_voices()`, `resolve_voice()`, `save_audio()`, `play_audio()`
    - Properties: `name`, `supported_formats`, `default_model`, `default_voice`
@@ -78,24 +78,24 @@ The codebase uses an abstract base class pattern for TTS providers to enable mul
    - `play_audio()` now includes volume parameter (0.0-5.0)
 
 2. **Provider Implementations**:
-   - `par_cli_tts/providers/elevenlabs.py`: ElevenLabs implementation with voice caching
-   - `par_cli_tts/providers/openai.py`: OpenAI TTS implementation
-   - `par_cli_tts/providers/kokoro_onnx.py`: Kokoro ONNX offline TTS with automatic model downloading
-   - `par_cli_tts/providers/deepgram.py`: Deepgram TTS (Aura / Aura-2) via REST `/v1/speak` (no SDK; httpx streaming)
-   - `par_cli_tts/providers/gemini.py`: Google Gemini TTS via REST `generateContent` audio modality (no SDK; raw 24 kHz PCM wrapped to WAV)
-   - Providers are registered in `par_cli_tts/providers/__init__.py` via the `PROVIDERS` dict
+   - `par_tts/providers/elevenlabs.py`: ElevenLabs implementation with voice caching
+   - `par_tts/providers/openai.py`: OpenAI TTS implementation
+   - `par_tts/providers/kokoro_onnx.py`: Kokoro ONNX offline TTS with automatic model downloading
+   - `par_tts/providers/deepgram.py`: Deepgram TTS (Aura / Aura-2) via REST `/v1/speak` (no SDK; httpx streaming)
+   - `par_tts/providers/gemini.py`: Google Gemini TTS via REST `generateContent` audio modality (no SDK; raw 24 kHz PCM wrapped to WAV)
+   - Providers are registered in `par_tts/providers/__init__.py` via the `PROVIDERS` dict
 
 3. **Adding New Providers**:
-   - Create new file in `par_cli_tts/providers/`
+   - Create new file in `par_tts/providers/`
    - Inherit from `TTSProvider`
    - Implement all abstract methods and properties
    - Register in `PROVIDERS` dict in `__init__.py`
-   - Update CLI help text in `par_cli_tts/tts_cli.py`
+   - Update CLI help text in `par_tts/tts_cli.py`
    - Add provider-specific environment variables if needed
 
 ### Voice Caching System
 
-ElevenLabs uses a sophisticated caching system (`par_cli_tts/voice_cache.py`):
+ElevenLabs uses a sophisticated caching system (`par_tts/voice_cache.py`):
 - Cache stored in XDG-compliant directories using `platformdirs`
 - 7-day expiry for cached voice data
 - Automatic cache updates when expired
@@ -103,7 +103,7 @@ ElevenLabs uses a sophisticated caching system (`par_cli_tts/voice_cache.py`):
 
 ### Model Management System
 
-Kokoro ONNX uses automatic model downloading (`par_cli_tts/model_downloader.py`):
+Kokoro ONNX uses automatic model downloading (`par_tts/model_downloader.py`):
 - Models stored in XDG-compliant data directories:
   - macOS: `~/Library/Application Support/par-tts-kokoro/`
   - Linux: `~/.local/share/par-tts-kokoro/`
@@ -116,7 +116,7 @@ Kokoro ONNX uses automatic model downloading (`par_cli_tts/model_downloader.py`)
 
 ### CLI Structure
 
-The main CLI (`par_cli_tts/tts_cli.py`) follows this flow:
+The main CLI (`par_tts/tts_cli.py`) follows this flow:
 1. Input handling (text argument, stdin pipe, or @filename)
 2. Provider selection via `--provider` flag or `TTS_PROVIDER` env var
 3. Provider instantiation with optional API key from environment
@@ -166,7 +166,7 @@ The CLI supports multiple input methods:
 - File path validation prevents directory traversal attacks
 
 ### Error Handling
-The project uses centralized error handling (`par_cli_tts/errors.py`):
+The project uses centralized error handling (`par_tts/errors.py`):
 - `ErrorType` enum categorizes errors with exit codes
 - `handle_error()` provides consistent error messages
 - Different exit codes for different error types:
@@ -243,7 +243,7 @@ Optional:
 
 ## Version Management
 
-Version is stored in `par_cli_tts/__init__.py` and dynamically read by hatchling build system. Update `__version__` there for new releases.
+Version is stored in `par_tts/__init__.py` and dynamically read by hatchling build system. Update `__version__` there for new releases.
 
 ## Type Checking
 
