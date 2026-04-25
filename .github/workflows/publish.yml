@@ -65,6 +65,7 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.skip_tests }}
+        run: make test
         timeout-minutes: 10
 
       - name: Build packages
