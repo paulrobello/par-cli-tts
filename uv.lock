@@ -880,6 +880,7 @@ name = "par-cli-tts"
 source = { editable = "." }
 dependencies = [
     { name = "elevenlabs" },
+    { name = "httpx" },
     { name = "kokoro-onnx" },
     { name = "openai" },
     { name = "platformdirs" },
@@ -904,25 +905,26 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "elevenlabs", specifier = ">=2.44.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "kokoro-onnx", specifier = ">=0.5.0" },
     { name = "openai", specifier = ">=2.32.0" },
-    { name = "platformdirs", specifier = ">=4.9.0" },
-    { name = "python-dotenv", specifier = ">=1.2.0" },
+    { name = "platformdirs", specifier = ">=4.9.6" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "soundfile", specifier = ">=0.13.1" },
-    { name = "typer", specifier = ">=0.24.0" },
+    { name = "typer", specifier = ">=0.24.2" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "build", specifier = ">=1.4.0" },
+    { name = "build", specifier = ">=1.4.4" },
     { name = "hatchling", specifier = ">=1.29.0" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pyright", specifier = ">=1.1.409" },
-    { name = "pytest", specifier = ">=9.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.15.0" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.15.12" },
 ]
 
 [[package]]

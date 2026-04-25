@@ -43,12 +43,12 @@ keywords = [
     "library",
 ]
 dependencies = [
-    "httpx>=0.27.0",
+    "httpx>=0.28.1",
     "elevenlabs>=2.44.0",
-    "python-dotenv>=1.2.0",
-    "typer>=0.24.0",
+    "python-dotenv>=1.2.2",
+    "typer>=0.24.2",
     "rich>=15.0.0",
-    "platformdirs>=4.9.0",
+    "platformdirs>=4.9.6",
     "pyyaml>=6.0.3",
     "openai>=2.32.0",
     "kokoro-onnx>=0.5.0",
@@ -80,17 +80,19 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "build>=1.4.0",
+    "build>=1.4.4",
     "pyright>=1.1.409",
     "pre-commit>=4.6.0",
-    "ruff>=0.15.0",
+    "ruff>=0.15.12",
     "hatchling>=1.29.0",
-    "pytest>=9.0.0",
-    "pytest-cov>=7.0.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = [
+    "tests",
+]
 addopts = "-v --cov=par_tts --cov-report=term-missing"
 
 [tool.hatch.version]
