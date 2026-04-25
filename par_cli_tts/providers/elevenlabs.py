@@ -11,11 +11,11 @@ with warnings.catch_warnings():
     from elevenlabs.client import ElevenLabs
     from elevenlabs.play import save
 
-from src.defaults import DEFAULT_ELEVENLABS_VOICE
-from src.http_client import create_http_client
-from src.providers.base import TTSProvider, Voice
-from src.utils import play_audio_bytes
-from src.voice_cache import VoiceCache, resolve_voice_identifier
+from par_cli_tts.defaults import DEFAULT_ELEVENLABS_VOICE
+from par_cli_tts.http_client import create_http_client
+from par_cli_tts.providers.base import TTSProvider, Voice
+from par_cli_tts.utils import play_audio_bytes
+from par_cli_tts.voice_cache import VoiceCache, resolve_voice_identifier
 
 
 class ElevenLabsProvider(TTSProvider):

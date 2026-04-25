@@ -38,13 +38,13 @@ keywords = [
     "audio",
 ]
 dependencies = [
-    "elevenlabs>=1.0.0",
-    "python-dotenv>=1.0.0",
-    "typer>=0.12.0",
-    "rich>=13.0.0",
-    "platformdirs>=4.3.0",
-    "pyyaml>=6.0.0",
-    "openai>=1.100.1",
+    "elevenlabs>=2.44.0",
+    "python-dotenv>=1.2.0",
+    "typer>=0.24.0",
+    "rich>=15.0.0",
+    "platformdirs>=4.9.0",
+    "pyyaml>=6.0.3",
+    "openai>=2.32.0",
     "kokoro-onnx>=0.5.0",
     "soundfile>=0.13.1",
 ]
@@ -61,9 +61,9 @@ Discussions = "https://github.com/paulrobello/par-cli-tts/discussions"
 Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
 
 [project.scripts]
-par-tts = "src.tts_cli:app"
-par-tts-kokoro = "src.kokoro_cli:app"
-par-tts-install-style = "src.install_claude_style:app"
+par-tts = "par_cli_tts.tts_cli:app"
+par-tts-kokoro = "par_cli_tts.kokoro_cli:app"
+par-tts-install-style = "par_cli_tts.install_claude_style:app"
 
 [build-system]
 requires = [
@@ -74,28 +74,28 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "build>=1.3.0",
-    "pyright>=1.1.403",
-    "pre-commit>=4.2.0",
-    "ruff>=0.12.7",
-    "hatchling>=1.27.0",
-    "pytest>=8.0.0",
-    "pytest-cov>=5.0.0",
+    "build>=1.4.0",
+    "pyright>=1.1.409",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.0",
+    "hatchling>=1.29.0",
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=src --cov-report=term-missing"
+addopts = "-v --cov=par_cli_tts --cov-report=term-missing"
 
 [tool.hatch.version]
-path = "src/__init__.py"
+path = "par_cli_tts/__init__.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "src",
+    "par_cli_tts",
 ]
 include = [
     "py.typed",
@@ -105,7 +105,7 @@ include = [
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src",
+    "par_cli_tts",
     ".claude",
     "LICENSE",
     "README.md",

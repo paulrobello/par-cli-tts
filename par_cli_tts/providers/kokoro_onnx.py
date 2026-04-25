@@ -8,9 +8,9 @@ from pathlib import Path
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
-from src.defaults import DEFAULT_KOKORO_VOICE
-from src.model_downloader import ModelDownloader
-from src.utils import play_audio_bytes
+from par_cli_tts.defaults import DEFAULT_KOKORO_VOICE
+from par_cli_tts.model_downloader import ModelDownloader
+from par_cli_tts.utils import play_audio_bytes
 
 from .base import TTSProvider, Voice
 

@@ -135,7 +135,7 @@ graph TB
 
 ### Core Components
 
-#### 1. CLI Interface (`src/tts_cli.py`)
+#### 1. CLI Interface (`par_cli_tts/tts_cli.py`)
 
 The main entry point that handles:
 - Command-line argument parsing using Typer with short flags
@@ -156,7 +156,7 @@ The main entry point that handles:
   - Updates `~/.claude/settings.json` with required permissions
   - Prompts for user name to personalize audio summaries
 
-#### 2. Provider Abstraction (`src/providers/base.py`)
+#### 2. Provider Abstraction (`par_cli_tts/providers/base.py`)
 
 Abstract base class defining the provider interface:
 - Speech generation with Iterator[bytes] support
@@ -168,7 +168,7 @@ Abstract base class defining the provider interface:
 
 #### 3. Provider Implementations
 
-**ElevenLabs Provider (`src/providers/elevenlabs.py`)**
+**ElevenLabs Provider (`par_cli_tts/providers/elevenlabs.py`)**
 - Voice caching support with change detection
 - Advanced voice settings (stability, similarity boost)
 - Streaming audio generation (Iterator[bytes])
@@ -177,7 +177,7 @@ Abstract base class defining the provider interface:
 - Default voice: Juniper
 - Supported formats: mp3, pcm, ulaw
 
-**OpenAI Provider (`src/providers/openai.py`)**
+**OpenAI Provider (`par_cli_tts/providers/openai.py`)**
 - Multiple audio formats (mp3, opus, aac, flac, wav, pcm)
 - Variable speech speed (0.25 to 4.0)
 - 13 voice options (alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar)
@@ -186,7 +186,7 @@ Abstract base class defining the provider interface:
 - Default model: gpt-4o-mini-tts
 - Default voice: nova
 
-**Kokoro ONNX Provider (`src/providers/kokoro_onnx.py`)**
+**Kokoro ONNX Provider (`par_cli_tts/providers/kokoro_onnx.py`)**
 - Offline TTS using ONNX Runtime (no API key required)
 - Automatic model downloading with SHA256 verification
 - XDG-compliant model storage (~106 MB download)
@@ -196,7 +196,7 @@ Abstract base class defining the provider interface:
 - Multiple output formats (wav, flac, ogg)
 - Default voice: af_sarah
 
-#### 4. Voice Cache System (`src/voice_cache.py`)
+#### 4. Voice Cache System (`par_cli_tts/voice_cache.py`)
 
 Intelligent caching layer for voice data:
 - XDG-compliant storage
@@ -207,7 +207,7 @@ Intelligent caching layer for voice data:
 - Manual cache refresh (--refresh-cache)
 - Sample cache management (--clear-cache-samples)
 
-#### 5. Model Downloader (`src/model_downloader.py`)
+#### 5. Model Downloader (`par_cli_tts/model_downloader.py`)
 
 Automatic model management for offline providers:
 - XDG-compliant data storage
@@ -217,7 +217,7 @@ Automatic model management for offline providers:
 - Model verification and cleanup
 - ~106 MB total download size for Kokoro ONNX
 
-#### 6. Utility Functions (`src/utils.py`)
+#### 6. Utility Functions (`par_cli_tts/utils.py`)
 
 Common utilities for the application:
 - `stream_to_file()`: Memory-efficient streaming
@@ -232,17 +232,18 @@ Common utilities for the application:
 - `_play_audio_windows()`: Windows-specific audio playback
 - `play_audio_bytes()`: Play audio from bytes using system player
 
-#### 7. Configuration File Manager (`src/config_file.py`)
+#### 7. Configuration File Manager (`par_cli_tts/config_file.py`)
 
 YAML-based configuration file support:
 - `ConfigFile`: Pydantic model for config structure with validation
 - `ConfigManager`: Load, validate, and merge configurations
-- XDG-compliant config location (~/.config/par-tts/config.yaml)
-- Sample config generation (--create-config)
+- XDG-compliant config location (~/.config/par-tts/config.yaml; `~/Library/Application Support/par-tts/config.yaml` on macOS)
+- Sample config generation (`--create-config`, with confirmation before overwrite; `-y/--yes` to skip the prompt)
+- Per-provider voice mapping (`voices:`) keyed by provider name
 - CLI argument precedence over config file
-- Configuration schema validation with Pydantic
+- Configuration schema validation with Pydantic (rejects unknown providers in `voices:`)
 
-#### 8. Error Handling Module (`src/errors.py`)
+#### 8. Error Handling Module (`par_cli_tts/errors.py`)
 
 Centralized error management:
 - `ErrorType`: Enum for categorized exit codes (User: 1, System: 2, File: 3, Config: 4)
@@ -253,7 +254,7 @@ Centralized error management:
 - `wrap_provider_error()`: Decorator for consistent provider error handling
 - Debug mode support with detailed stack traces
 
-#### 9. Default Values (`src/defaults.py`)
+#### 9. Default Values (`par_cli_tts/defaults.py`)
 
 Centralized default configuration values:
 - `DEFAULT_PROVIDER`: kokoro-onnx
@@ -262,7 +263,7 @@ Centralized default configuration values:
 - `DEFAULT_KOKORO_VOICE`: af_sarah
 - `get_default_voice()`: Get default voice for a provider (checks env vars first)
 
-#### 10. Configuration Dataclasses (`src/config.py`)
+#### 10. Configuration Dataclasses (`par_cli_tts/config.py`)
 
 Structured configuration dataclasses for internal use:
 - `AudioSettings`: Format, speed, stability, similarity, lang settings
@@ -271,20 +272,20 @@ Structured configuration dataclasses for internal use:
 - `TTSConfig`: Complete configuration combining all settings
 - `get_provider_kwargs()`: Extract provider-specific kwargs from config
 
-#### 11. Console Output (`src/console.py`)
+#### 11. Console Output (`par_cli_tts/console.py`)
 
 Shared console instances for consistent output:
 - `console`: Standard output Console instance (stdout)
 - `error_console`: Error output Console instance (stderr)
 
-#### 12. HTTP Client Factory (`src/http_client.py`)
+#### 12. HTTP Client Factory (`par_cli_tts/http_client.py`)
 
 HTTP client creation with consistent configuration:
 - `create_http_client()`: Factory function for httpx.Client
 - Configurable timeout (default: 10 seconds)
 - SSL verification options
 
-#### 13. Kokoro Model CLI (`src/kokoro_cli.py`)
+#### 13. Kokoro Model CLI (`par_cli_tts/kokoro_cli.py`)
 
 Dedicated CLI for Kokoro ONNX model management:
 - `download`: Download model files with --force option
@@ -446,7 +447,7 @@ classDiagram
 
 ### Provider Registration
 
-Providers are registered in a central registry (`src/providers/__init__.py`):
+Providers are registered in a central registry (`par_cli_tts/providers/__init__.py`):
 
 ```python
 PROVIDERS = {
@@ -1067,9 +1068,9 @@ flowchart TD
 ### Provider Template
 
 ```python
-# src/providers/new_provider.py
+# par_cli_tts/providers/new_provider.py
 from typing import Any
-from src.providers.base import TTSProvider, Voice
+from par_cli_tts.providers.base import TTSProvider, Voice
 
 class NewProvider(TTSProvider):
     """New TTS provider implementation."""

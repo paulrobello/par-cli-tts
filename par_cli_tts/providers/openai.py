@@ -6,11 +6,11 @@ from typing import Any, Literal
 
 from openai import OpenAI
 
-from src.console import console
-from src.defaults import DEFAULT_OPENAI_VOICE
-from src.http_client import create_http_client
-from src.providers.base import TTSProvider, Voice
-from src.utils import play_audio_bytes
+from par_cli_tts.console import console
+from par_cli_tts.defaults import DEFAULT_OPENAI_VOICE
+from par_cli_tts.http_client import create_http_client
+from par_cli_tts.providers.base import TTSProvider, Voice
+from par_cli_tts.utils import play_audio_bytes
 
 
 class OpenAIProvider(TTSProvider):

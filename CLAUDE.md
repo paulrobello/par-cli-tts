@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PAR CLI TTS is a command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX). The architecture uses a provider abstraction pattern to enable easy addition of new TTS services while maintaining a consistent interface.
+PAR CLI TTS is a command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini). The architecture uses a provider abstraction pattern to enable easy addition of new TTS services while maintaining a consistent interface.
 
 ## Development Commands
 
@@ -69,7 +69,7 @@ make publish
 
 The codebase uses an abstract base class pattern for TTS providers to enable multiple implementations:
 
-1. **Base Provider (`src/providers/base.py`)**:
+1. **Base Provider (`par_cli_tts/providers/base.py`)**:
    - Defines `TTSProvider` abstract class with required methods
    - All providers must implement: `generate_speech()`, `list_voices()`, `resolve_voice()`, `save_audio()`, `play_audio()`
    - Properties: `name`, `supported_formats`, `default_model`, `default_voice`
@@ -78,22 +78,24 @@ The codebase uses an abstract base class pattern for TTS providers to enable mul
    - `play_audio()` now includes volume parameter (0.0-5.0)
 
 2. **Provider Implementations**:
-   - `src/providers/elevenlabs.py`: ElevenLabs implementation with voice caching
-   - `src/providers/openai.py`: OpenAI TTS implementation
-   - `src/providers/kokoro_onnx.py`: Kokoro ONNX offline TTS with automatic model downloading
-   - Providers are registered in `src/providers/__init__.py` via the `PROVIDERS` dict
+   - `par_cli_tts/providers/elevenlabs.py`: ElevenLabs implementation with voice caching
+   - `par_cli_tts/providers/openai.py`: OpenAI TTS implementation
+   - `par_cli_tts/providers/kokoro_onnx.py`: Kokoro ONNX offline TTS with automatic model downloading
+   - `par_cli_tts/providers/deepgram.py`: Deepgram TTS (Aura / Aura-2) via REST `/v1/speak` (no SDK; httpx streaming)
+   - `par_cli_tts/providers/gemini.py`: Google Gemini TTS via REST `generateContent` audio modality (no SDK; raw 24 kHz PCM wrapped to WAV)
+   - Providers are registered in `par_cli_tts/providers/__init__.py` via the `PROVIDERS` dict
 
 3. **Adding New Providers**:
-   - Create new file in `src/providers/`
+   - Create new file in `par_cli_tts/providers/`
    - Inherit from `TTSProvider`
    - Implement all abstract methods and properties
    - Register in `PROVIDERS` dict in `__init__.py`
-   - Update CLI help text in `src/tts_cli.py`
+   - Update CLI help text in `par_cli_tts/tts_cli.py`
    - Add provider-specific environment variables if needed
 
 ### Voice Caching System
 
-ElevenLabs uses a sophisticated caching system (`src/voice_cache.py`):
+ElevenLabs uses a sophisticated caching system (`par_cli_tts/voice_cache.py`):
 - Cache stored in XDG-compliant directories using `platformdirs`
 - 7-day expiry for cached voice data
 - Automatic cache updates when expired
@@ -101,7 +103,7 @@ ElevenLabs uses a sophisticated caching system (`src/voice_cache.py`):
 
 ### Model Management System
 
-Kokoro ONNX uses automatic model downloading (`src/model_downloader.py`):
+Kokoro ONNX uses automatic model downloading (`par_cli_tts/model_downloader.py`):
 - Models stored in XDG-compliant data directories:
   - macOS: `~/Library/Application Support/par-tts-kokoro/`
   - Linux: `~/.local/share/par-tts-kokoro/`
@@ -114,7 +116,7 @@ Kokoro ONNX uses automatic model downloading (`src/model_downloader.py`):
 
 ### CLI Structure
 
-The main CLI (`src/tts_cli.py`) follows this flow:
+The main CLI (`par_cli_tts/tts_cli.py`) follows this flow:
 1. Input handling (text argument, stdin pipe, or @filename)
 2. Provider selection via `--provider` flag or `TTS_PROVIDER` env var
 3. Provider instantiation with optional API key from environment
@@ -164,7 +166,7 @@ The CLI supports multiple input methods:
 - File path validation prevents directory traversal attacks
 
 ### Error Handling
-The project uses centralized error handling (`src/errors.py`):
+The project uses centralized error handling (`par_cli_tts/errors.py`):
 - `ErrorType` enum categorizes errors with exit codes
 - `handle_error()` provides consistent error messages
 - Different exit codes for different error types:
@@ -176,15 +178,43 @@ The project uses centralized error handling (`src/errors.py`):
 ## Configuration
 
 ### Configuration File
-Settings can be defined in `~/.config/par-tts/config.yaml`:
-- Provider defaults: `provider`, `voice`, `model`
+Settings can be defined in `~/.config/par-tts/config.yaml` (macOS uses `~/Library/Application Support/par-tts/config.yaml`):
+- Provider defaults: `provider`, `voice`, `voices` (per-provider mapping), `model`
 - API keys: `elevenlabs_api_key`, `openai_api_key` (optional, can also use env vars)
 - Output settings: `output_dir`, `output_format`, `keep_temp`, `temp_dir`
 - Audio settings: `volume`, `speed`
 - Provider-specific: `stability`, `similarity_boost`, `lang`
 - Behavior: `play_audio`, `debug`
 
-Use `--create-config` to generate a sample configuration file.
+Use `--create-config` to generate a sample configuration file. If a config already
+exists, the command prompts for confirmation before overwriting; pass `-y`/`--yes`
+to skip the prompt (useful for scripting).
+
+#### Per-provider voices (`voices:` mapping)
+
+The `voices:` field is a mapping keyed by provider name (`elevenlabs`, `openai`,
+`kokoro-onnx`). When the active provider has an entry there, that voice is used —
+even if the active provider was set via `-P` and differs from `provider:`. Unknown
+provider keys are rejected when the config is loaded.
+
+The legacy `voice:` field still works but only when the active provider matches
+`provider:` — this prevents an ElevenLabs voice ID from being silently applied to
+OpenAI when the user runs `-P openai`.
+
+```yaml
+provider: kokoro-onnx
+voices:
+  elevenlabs: Juniper
+  openai: nova
+  kokoro-onnx: af_sarah
+```
+
+#### Voice resolution order
+1. CLI `-v`/`--voice` or `TTS_VOICE_ID` env var
+2. `config.voices[<active-provider>]`
+3. `config.voice` — only when the active provider equals `config.provider`
+4. Provider-specific env var (`ELEVENLABS_VOICE_ID`, `OPENAI_VOICE_ID`, `KOKORO_VOICE_ID`)
+5. Built-in provider default
 
 ### Environment Variables
 
@@ -193,11 +223,15 @@ Required (at least one for cloud providers):
 - `OPENAI_API_KEY`: OpenAI API key
 
 Optional:
-- `TTS_PROVIDER`: Default provider (kokoro-onnx/elevenlabs/openai) - defaults to kokoro-onnx
+- `TTS_PROVIDER`: Default provider (kokoro-onnx/elevenlabs/openai/deepgram/gemini) - defaults to kokoro-onnx
 - `TTS_VOICE_ID`: Default voice (overrides provider-specific)
 - `ELEVENLABS_VOICE_ID`: Default ElevenLabs voice (defaults to "Juniper")
 - `OPENAI_VOICE_ID`: Default OpenAI voice
 - `KOKORO_VOICE_ID`: Default Kokoro ONNX voice
+- `DEEPGRAM_VOICE_ID`: Default Deepgram voice (defaults to "aura-2-thalia-en")
+- `DEEPGRAM_API_KEY` / `DG_API_KEY`: Deepgram API key (either is accepted)
+- `GEMINI_VOICE_ID`: Default Gemini voice (defaults to "Kore")
+- `GEMINI_API_KEY` / `GOOGLE_API_KEY`: Gemini API key (either is accepted)
 - `KOKORO_MODEL_PATH`: Custom path to ONNX model (disables auto-download)
 - `KOKORO_VOICE_PATH`: Custom path to voice embeddings (disables auto-download)
 
@@ -209,7 +243,7 @@ Optional:
 
 ## Version Management
 
-Version is stored in `src/__init__.py` and dynamically read by hatchling build system. Update `__version__` there for new releases.
+Version is stored in `par_cli_tts/__init__.py` and dynamically read by hatchling build system. Update `__version__` there for new releases.
 
 ## Type Checking
 

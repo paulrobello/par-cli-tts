@@ -8,7 +8,7 @@ from pathlib import Path
 from platformdirs import user_data_dir
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 
-from src.console import console
+from par_cli_tts.console import console
 
 
 class ModelDownloader:
@@ -68,7 +68,7 @@ class ModelDownloader:
             size_mb: Approximate size in MB for display.
             sha256: Optional SHA256 checksum for verification.
         """
-        from src.utils import verify_file_checksum
+        from par_cli_tts.utils import verify_file_checksum
 
         try:
             # Create a temporary file first

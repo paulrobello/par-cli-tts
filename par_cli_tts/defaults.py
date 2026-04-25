@@ -13,13 +13,15 @@ DEFAULT_PROVIDER = "kokoro-onnx"
 DEFAULT_ELEVENLABS_VOICE = "Juniper"
 DEFAULT_OPENAI_VOICE = "nova"
 DEFAULT_KOKORO_VOICE = "af_sarah"
+DEFAULT_DEEPGRAM_VOICE = "aura-2-thalia-en"
+DEFAULT_GEMINI_VOICE = "Kore"
 
 
 def get_default_voice(provider: str) -> str:
     """Get default voice for the specified provider.
 
     Args:
-        provider: Provider name (elevenlabs, openai, kokoro-onnx).
+        provider: Provider name (elevenlabs, openai, kokoro-onnx, deepgram, gemini).
 
     Returns:
         Default voice ID for the provider, checking environment
@@ -29,5 +31,7 @@ def get_default_voice(provider: str) -> str:
         "elevenlabs": os.getenv("ELEVENLABS_VOICE_ID", DEFAULT_ELEVENLABS_VOICE),
         "openai": os.getenv("OPENAI_VOICE_ID", DEFAULT_OPENAI_VOICE),
         "kokoro-onnx": os.getenv("KOKORO_VOICE_ID", DEFAULT_KOKORO_VOICE),
+        "deepgram": os.getenv("DEEPGRAM_VOICE_ID", DEFAULT_DEEPGRAM_VOICE),
+        "gemini": os.getenv("GEMINI_VOICE_ID", DEFAULT_GEMINI_VOICE),
     }
     return defaults.get(provider, "")

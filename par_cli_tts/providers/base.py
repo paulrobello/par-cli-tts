@@ -98,7 +98,7 @@ class TTSProvider(ABC):
             audio_stream: Iterator yielding audio data chunks.
             file_path: Path to save the audio file.
         """
-        from src.utils import stream_to_file
+        from par_cli_tts.utils import stream_to_file
 
         stream_to_file(audio_stream, file_path)
 

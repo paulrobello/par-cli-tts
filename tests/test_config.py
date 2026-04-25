@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from src.config import AudioSettings, OutputSettings, ProviderSettings, TTSConfig
-from src.config_file import ConfigFile, ConfigManager
+from par_cli_tts.config import AudioSettings, OutputSettings, ProviderSettings, TTSConfig
+from par_cli_tts.config_file import ConfigFile, ConfigManager
 
 
 class TestAudioSettings:
@@ -158,6 +158,25 @@ class TestConfigFile:
         with pytest.raises(Exception):  # Pydantic ValidationError
             ConfigFile(speed=0.1)  # Under min of 0.25
 
+    def test_voices_per_provider(self):
+        """Should accept a per-provider voices mapping for known providers."""
+        config = ConfigFile(
+            voices={
+                "elevenlabs": "Rachel",
+                "openai": "nova",
+                "kokoro-onnx": "af_sarah",
+            }
+        )
+        assert config.voices is not None
+        assert config.voices["elevenlabs"] == "Rachel"
+        assert config.voices["openai"] == "nova"
+        assert config.voices["kokoro-onnx"] == "af_sarah"
+
+    def test_voices_rejects_unknown_provider(self):
+        """Should reject unknown provider keys in voices mapping."""
+        with pytest.raises(Exception):  # Pydantic ValidationError
+            ConfigFile(voices={"bogus": "foo"})
+
 
 class TestConfigManager:
     """Tests for ConfigManager class."""
@@ -165,7 +184,7 @@ class TestConfigManager:
     def test_load_missing_config(self, tmp_path, monkeypatch):
         """Should return None for missing config file."""
         monkeypatch.setattr(
-            "src.config_file.platformdirs.user_config_dir",
+            "par_cli_tts.config_file.platformdirs.user_config_dir",
             lambda _: str(tmp_path)
         )
 
@@ -177,7 +196,7 @@ class TestConfigManager:
     def test_create_sample_config(self, tmp_path, monkeypatch):
         """Should create a sample config file."""
         monkeypatch.setattr(
-            "src.config_file.platformdirs.user_config_dir",
+            "par_cli_tts.config_file.platformdirs.user_config_dir",
             lambda _: str(tmp_path)
         )
 
@@ -191,7 +210,7 @@ class TestConfigManager:
     def test_merge_with_cli_args(self, tmp_path, monkeypatch):
         """Should merge config file with CLI args, CLI taking precedence."""
         monkeypatch.setattr(
-            "src.config_file.platformdirs.user_config_dir",
+            "par_cli_tts.config_file.platformdirs.user_config_dir",
             lambda _: str(tmp_path)
         )
 
@@ -207,7 +226,7 @@ class TestConfigManager:
     def test_get_value(self, tmp_path, monkeypatch):
         """Should get config values with defaults."""
         monkeypatch.setattr(
-            "src.config_file.platformdirs.user_config_dir",
+            "par_cli_tts.config_file.platformdirs.user_config_dir",
             lambda _: str(tmp_path)
         )
 

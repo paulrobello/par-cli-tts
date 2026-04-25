@@ -4,7 +4,7 @@ import sys
 from enum import Enum
 from typing import NoReturn
 
-from src.console import error_console as console
+from par_cli_tts.console import error_console as console
 
 
 class ErrorType(Enum):

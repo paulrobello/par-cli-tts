@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Google Gemini TTS provider** (`-P gemini`) — Gemini API
+  `generateContent` with `responseModalities: ["AUDIO"]` integration via httpx
+  (no SDK). All 30 prebuilt voices (Zephyr, Puck, Kore, Aoede, …) with style
+  descriptors. The API returns raw 16-bit mono PCM at 24 kHz; the provider
+  prepends a RIFF/WAVE header so output is a self-contained `.wav` file. API
+  key sources, in order: `gemini_api_key` in config, `GEMINI_API_KEY` env
+  var, then `GOOGLE_API_KEY` env var (the Google AI Studio default name).
+  New `gemini` key supported in the per-provider `voices:` mapping. Default
+  voice: `Kore`. Default model: `gemini-2.5-flash-preview-tts`.
+
+- **Deepgram TTS provider** (`-P deepgram`) — REST `/v1/speak` integration via httpx
+  (no SDK dependency). Supports the full Aura and Aura-2 voice catalog (English,
+  Spanish, Dutch, French, German, Italian, Japanese). Voice resolution accepts the
+  full ID (`aura-2-thalia-en`), an ID prefix (`aura-2-thalia`), or just the speaker
+  name (`thalia`, prefers Aura-2 English first). API key sources, in order:
+  `deepgram_api_key` in config, `DEEPGRAM_API_KEY` env var, or `DG_API_KEY` env var
+  (the historical Deepgram convention). New `deepgram` key supported in the
+  per-provider `voices:` mapping. Default voice: `aura-2-thalia-en`.
+
+- **`-y` / `--yes` flag** — answer yes to confirmation prompts (currently used by
+  `--create-config` to suppress the new overwrite prompt for scripted setup).
+
+- **Per-provider voice configuration** — new `voices:` mapping in `config.yaml`
+  - Keyed by provider name (`elevenlabs`, `openai`, `kokoro-onnx`)
+  - Used whenever that provider is active, regardless of which provider the config
+    was originally written for (so `-P openai` no longer inherits an ElevenLabs voice ID)
+  - Takes precedence over the legacy global `voice` field
+  - Unknown provider keys are rejected at config-load time
+  - Example:
+    ```yaml
+    voices:
+      elevenlabs: Juniper
+      openai: nova
+      kokoro-onnx: af_sarah
+    ```
+
+### Changed
+
+- **Package layout** — internal package renamed from `src` to `par_cli_tts` for a
+  proper, importable PyPI-style name. No public CLI/API surface change; only
+  affects direct internal imports (e.g. `from par_cli_tts.providers.base import ...`).
+- **Dependency version floors raised** to current upstream majors:
+  - Runtime: `elevenlabs>=2.44`, `openai>=2.32`, `rich>=15`, `typer>=0.24`,
+    `python-dotenv>=1.2`, `platformdirs>=4.9`, `pyyaml>=6.0.3`
+  - Dev: `pytest>=9`, `pytest-cov>=7`, `ruff>=0.15`, `pyright>=1.1.409`,
+    `pre-commit>=4.6`, `build>=1.4`, `hatchling>=1.29`
+
+### Fixed
+
+- **`--no-play` is now respected** — previously the config-file merge expression
+  silently coerced an explicit `--no-play` (False) back to True whenever the
+  config file did not set `play_audio`. Audio now stays silent when the user asks
+  for it to. `--play` (the default) still falls through to `config.play_audio`
+  when set.
+
+- **`--create-config` no longer silently overwrites an existing config** — it now
+  prompts for confirmation; pass `-y`/`--yes` to skip.
+
+- **Voice bleed across providers** — overriding only `-P/--provider` (or `TTS_PROVIDER`)
+  no longer applies the config's `voice`/`model` fields to the new provider when
+  they were intended for a different one. Voice falls through to the new provider's
+  default (or the per-provider entry in the new `voices:` mapping if set).
+
 ## [0.4.2] - 2025-03-02
 
 ### Fixed

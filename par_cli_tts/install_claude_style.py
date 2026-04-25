@@ -14,7 +14,7 @@ from typing import Annotated, Any
 import typer
 from rich.prompt import Prompt
 
-from src.console import console
+from par_cli_tts.console import console
 
 app = typer.Typer(
     help="Install TTS Summary output style for Claude Code",

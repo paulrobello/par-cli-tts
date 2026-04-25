@@ -19,11 +19,11 @@ from dotenv import load_dotenv
 from rich.pretty import Pretty
 from rich.table import Table
 
-from src.config_file import ConfigManager
-from src.console import console
-from src.defaults import DEFAULT_PROVIDER, get_default_voice
-from src.errors import ErrorType, handle_error, validate_api_key, validate_file_path
-from src.providers import PROVIDERS, TTSProvider
+from par_cli_tts.config_file import ConfigManager
+from par_cli_tts.console import console
+from par_cli_tts.defaults import DEFAULT_PROVIDER, get_default_voice
+from par_cli_tts.errors import ErrorType, handle_error, validate_api_key, validate_file_path
+from par_cli_tts.providers import PROVIDERS, TTSProvider
 
 app = typer.Typer(help="Text-to-speech command line tool with multiple provider support")
 
@@ -33,7 +33,7 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
     Get API key for the specified provider from config file or environment.
 
     Args:
-        provider: Provider name (elevenlabs, openai, kokoro-onnx).
+        provider: Provider name (elevenlabs, openai, kokoro-onnx, deepgram, gemini).
         config_file: Optional config file with API keys.
 
     Returns:
@@ -46,17 +46,21 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
     if provider == "kokoro-onnx":
         return None
 
-    # Map provider to config file field and environment variable
-    key_map = {
+    # Map provider to config file field and accepted environment variables (in
+    # priority order). Deepgram historically used DG_API_KEY; Gemini accepts the
+    # generic GOOGLE_API_KEY as well as GEMINI_API_KEY.
+    key_map: dict[str, tuple[str, ...]] = {
         "elevenlabs": ("elevenlabs_api_key", "ELEVENLABS_API_KEY"),
         "openai": ("openai_api_key", "OPENAI_API_KEY"),
+        "deepgram": ("deepgram_api_key", "DEEPGRAM_API_KEY", "DG_API_KEY"),
+        "gemini": ("gemini_api_key", "GEMINI_API_KEY", "GOOGLE_API_KEY"),
     }
 
     if provider not in key_map:
         handle_error(f"Unknown provider '{provider}'", ErrorType.INVALID_PROVIDER)
         return None  # For type checker, never reached
 
-    config_field, env_var = key_map[provider]
+    config_field, *env_vars = key_map[provider]
 
     # Check config file first
     if config_file:
@@ -64,15 +68,19 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
         if api_key:
             return api_key
 
-    # Fall back to environment variable
-    api_key = os.getenv(env_var)
-    if not api_key:
-        handle_error(
-            f"{env_var} not found. Please set {env_var} in your config file or environment",
-            ErrorType.MISSING_API_KEY,
-        )
+    # Fall back to environment variable(s) — first hit wins
+    for env_var in env_vars:
+        api_key = os.getenv(env_var)
+        if api_key:
+            return api_key
 
-    return api_key
+    primary = env_vars[0]
+    alt = f" (also accepts {', '.join(env_vars[1:])})" if len(env_vars) > 1 else ""
+    handle_error(
+        f"{primary} not found. Please set {primary}{alt} in your config file or environment",
+        ErrorType.MISSING_API_KEY,
+    )
+    return None  # never reached; handle_error exits
 
 
 def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) -> TTSProvider:
@@ -159,18 +167,19 @@ def get_provider_kwargs(
     return kwargs
 
 
-def handle_config_operations(create_config: bool, config_manager: ConfigManager) -> bool:
+def handle_config_operations(create_config: bool, config_manager: ConfigManager, force: bool = False) -> bool:
     """Handle configuration-related operations.
 
     Args:
         create_config: Whether to create a sample config file.
         config_manager: Config manager instance.
+        force: If True, overwrite an existing config without prompting.
 
     Returns:
         True if operation was handled and main should return, False otherwise.
     """
     if create_config:
-        config_manager.create_sample_config()
+        config_manager.create_sample_config(force=force)
         return True
     return False
 
@@ -288,7 +297,7 @@ def handle_voice_preview(
         # Check for cached sample first (ElevenLabs only)
         audio_data = None
         if provider == "elevenlabs":
-            from src.voice_cache import VoiceCache
+            from par_cli_tts.voice_cache import VoiceCache
 
             cache = VoiceCache("par-tts-elevenlabs")
             cached_sample = cache.get_voice_sample(resolved_voice)
@@ -310,7 +319,7 @@ def handle_voice_preview(
 
             # Cache the sample for future use (ElevenLabs only)
             if provider == "elevenlabs" and isinstance(audio_data, bytes):
-                from src.voice_cache import VoiceCache
+                from par_cli_tts.voice_cache import VoiceCache
 
                 cache = VoiceCache("par-tts-elevenlabs")
                 cache.cache_voice_sample(resolved_voice, sample_text, audio_data)
@@ -565,7 +574,7 @@ def main(
         typer.Option(
             "-P",
             "--provider",
-            help="TTS provider to use (elevenlabs, openai, kokoro-onnx)",
+            help="TTS provider to use (elevenlabs, openai, kokoro-onnx, deepgram, gemini)",
             envvar="TTS_PROVIDER",
         ),
     ] = None,
@@ -745,6 +754,14 @@ def main(
             help="Create a sample configuration file",
         ),
     ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "-y",
+            "--yes",
+            help="Answer yes to confirmations (e.g. overwriting an existing config)",
+        ),
+    ] = False,
     clear_kokoro_models: Annotated[
         bool,
         typer.Option(
@@ -764,7 +781,7 @@ def main(
 
     # Handle config operations
     config_manager = ConfigManager()
-    if handle_config_operations(create_config, config_manager):
+    if handle_config_operations(create_config, config_manager, force=yes):
         return
 
     # Load configuration file
@@ -773,8 +790,16 @@ def main(
     # Apply config file defaults (CLI args override these)
     if config_file:
         provider = provider or config_file.provider
-        voice = voice or config_file.voice
-        model = model or config_file.model
+        # Voice resolution: per-provider `voices` mapping takes precedence; the legacy
+        # global `voice` field is only applied when the active provider matches the one
+        # the config was written for. Same provider-match rule for `model`.
+        if not voice:
+            if config_file.voices and provider and provider in config_file.voices:
+                voice = config_file.voices[provider]
+            elif provider == config_file.provider:
+                voice = config_file.voice
+        if not model and provider == config_file.provider:
+            model = config_file.model
         output = output or (Path(config_file.output_dir) / "output.mp3" if config_file.output_dir else None)
         response_format = response_format if response_format != "mp3" else config_file.output_format or "mp3"
         keep_temp = keep_temp if keep_temp else config_file.keep_temp or False
@@ -784,9 +809,12 @@ def main(
         stability = stability if stability != 0.5 else config_file.stability or 0.5
         similarity_boost = similarity_boost if similarity_boost != 0.5 else config_file.similarity_boost or 0.5
         lang = lang or config_file.lang or "en-us"
-        play_audio = (
-            play_audio if play_audio else config_file.play_audio if config_file.play_audio is not None else True
-        )
+        # CLI default is True. `--no-play` flips it to False — respect that explicit
+        # override. Only fall through to the config value when the CLI value is still
+        # the default (True); we cannot distinguish "user typed --play" from "user
+        # passed nothing", so the config can override the True default but not False.
+        if play_audio and config_file.play_audio is not None:
+            play_audio = config_file.play_audio
         debug = debug or config_file.debug or False
 
     # Apply default provider if still not set
@@ -821,8 +849,8 @@ def main(
     # Handle cache management operations (ElevenLabs only)
     if refresh_cache or clear_cache_samples:
         if provider == "elevenlabs":
-            from src.providers.elevenlabs import ElevenLabsProvider
-            from src.voice_cache import VoiceCache
+            from par_cli_tts.providers.elevenlabs import ElevenLabsProvider
+            from par_cli_tts.voice_cache import VoiceCache
 
             if isinstance(tts_provider, ElevenLabsProvider):
                 cache = VoiceCache("par-tts-elevenlabs")
@@ -846,7 +874,7 @@ def main(
 
     # Handle clear Kokoro models
     if clear_kokoro_models:
-        from src.model_downloader import ModelDownloader
+        from par_cli_tts.model_downloader import ModelDownloader
 
         downloader = ModelDownloader()
         if downloader.models_exist():
@@ -906,7 +934,7 @@ def main(
 
     # Debug information
     if debug:
-        from src.utils import sanitize_debug_output
+        from par_cli_tts.utils import sanitize_debug_output
 
         debug_info = {
             "Provider": provider,

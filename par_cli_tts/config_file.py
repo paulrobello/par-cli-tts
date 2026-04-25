@@ -5,9 +5,12 @@ from typing import Any
 
 import platformdirs
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
+from rich.prompt import Confirm
 
-from src.console import console
+from par_cli_tts.console import console
+
+VALID_PROVIDERS = {"elevenlabs", "openai", "kokoro-onnx", "deepgram", "gemini"}
 
 
 class ConfigFile(BaseModel):
@@ -15,12 +18,21 @@ class ConfigFile(BaseModel):
 
     # Provider settings
     provider: str | None = Field(None, description="Default TTS provider")
-    voice: str | None = Field(None, description="Default voice")
+    voice: str | None = Field(
+        None,
+        description="Legacy default voice (only applied when active provider matches `provider`)",
+    )
+    voices: dict[str, str] | None = Field(
+        None,
+        description="Per-provider default voices keyed by provider name (elevenlabs, openai, kokoro-onnx)",
+    )
     model: str | None = Field(None, description="Default model")
 
     # API keys (optional - can also be set via environment variables)
     elevenlabs_api_key: str | None = Field(None, description="ElevenLabs API key")
     openai_api_key: str | None = Field(None, description="OpenAI API key")
+    deepgram_api_key: str | None = Field(None, description="Deepgram API key")
+    gemini_api_key: str | None = Field(None, description="Google Gemini API key (also accepts GOOGLE_API_KEY env var)")
 
     # Output settings
     output_dir: str | None = Field(None, description="Default output directory")
@@ -47,6 +59,16 @@ class ConfigFile(BaseModel):
         """Pydantic config."""
 
         extra = "forbid"  # Don't allow unknown fields
+
+    @field_validator("voices")
+    @classmethod
+    def _validate_voices_providers(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return v
+        unknown = set(v) - VALID_PROVIDERS
+        if unknown:
+            raise ValueError(f"Unknown provider(s) in 'voices': {sorted(unknown)}. Valid: {sorted(VALID_PROVIDERS)}")
+        return v
 
 
 class ConfigManager:
@@ -91,8 +113,15 @@ class ConfigManager:
             console.print(f"[yellow]Warning: Could not load config: {e}[/yellow]")
             return None
 
-    def create_sample_config(self) -> None:
-        """Create a sample configuration file."""
+    def create_sample_config(self, force: bool = False) -> bool:
+        """Create a sample configuration file.
+
+        Args:
+            force: If True, overwrite an existing config without prompting.
+
+        Returns:
+            True if the file was written, False if the user declined to overwrite.
+        """
         sample_lines = [
             "# PAR CLI TTS Configuration File",
             "# Uncomment and modify settings as needed",
@@ -100,8 +129,20 @@ class ConfigManager:
             "# Default provider (elevenlabs, openai, kokoro-onnx)",
             "# provider: kokoro-onnx",
             "",
-            "# Default voice (name or ID)",
+            "# Default voice (name or ID).",
+            "# Only applied when the active provider matches the `provider` setting above.",
+            "# Prefer the per-provider `voices:` mapping below for multi-provider use.",
             "# voice: Rachel",
+            "",
+            "# Per-provider default voices. Each entry is used when that provider is active",
+            "# (via -P/--provider, TTS_PROVIDER, or `provider` above), regardless of which",
+            "# provider the config was originally written for. Takes precedence over `voice`.",
+            "# voices:",
+            "#   elevenlabs: Juniper",
+            "#   openai: nova",
+            "#   kokoro-onnx: af_sarah",
+            "#   deepgram: aura-2-thalia-en",
+            "#   gemini: Kore",
             "",
             "# Default model",
             "# model: eleven_monolingual_v1",
@@ -109,6 +150,8 @@ class ConfigManager:
             "# API keys (optional - can also be set via environment variables)",
             "# elevenlabs_api_key: your-elevenlabs-api-key-here",
             "# openai_api_key: your-openai-api-key-here",
+            "# deepgram_api_key: your-deepgram-api-key-here",
+            "# gemini_api_key: your-google-gemini-api-key-here",
             "",
             "# Output settings",
             "# output_dir: ~/Documents/audio",
@@ -132,6 +175,13 @@ class ConfigManager:
             "# debug: false",
         ]
 
+        # Confirm before clobbering an existing config
+        if self.config_file.exists() and not force:
+            console.print(f"[yellow]Config already exists at {self.config_file}[/yellow]")
+            if not Confirm.ask("Overwrite?", default=False):
+                console.print("[dim]Aborted — existing config preserved.[/dim]")
+                return False
+
         # Create config directory if it doesn't exist
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -142,6 +192,7 @@ class ConfigManager:
 
         console.print(f"[green]✓ Created sample config at {self.config_file}[/green]")
         console.print("[dim]Edit this file to set your default preferences[/dim]")
+        return True
 
     def merge_with_cli_args(self, **cli_args: Any) -> dict[str, Any]:
         """Merge configuration file with CLI arguments.

@@ -8,7 +8,7 @@
 ![Version](https://img.shields.io/badge/version-0.4.1-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
-A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, and Kokoro ONNX) with intelligent voice caching, name resolution, and flexible output options.
+A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini) with intelligent voice caching, name resolution, and flexible output options.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
@@ -39,6 +39,31 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 - [Support](#support)
 
 ## What's New
+
+### Unreleased
+- **Google Gemini TTS provider** - Added `-P gemini` with all 30 prebuilt voices
+  (Zephyr, Puck, Kore, Aoede, …) via the `generateContent` audio modality. The
+  API returns raw 24 kHz 16-bit mono PCM; the provider wraps it in a WAV header
+  so output is a self-contained `.wav`. API key sources, in order:
+  `gemini_api_key` in config, `GEMINI_API_KEY` env, or `GOOGLE_API_KEY` env.
+- **Deepgram TTS provider** - Added `-P deepgram` with full Aura and Aura-2 voice
+  catalog (English, Spanish, Dutch, French, German, Italian, Japanese). Voice
+  resolution accepts the full ID (`aura-2-thalia-en`), an ID prefix
+  (`aura-2-thalia`), or just the speaker name (`thalia`). API key sources, in
+  order: `deepgram_api_key` in config, then `DEEPGRAM_API_KEY` or `DG_API_KEY`
+  env vars.
+- **Per-provider voice configuration** - New `voices:` mapping in `config.yaml`
+  keyed by provider name; switching providers with `-P` no longer inherits a
+  voice ID belonging to a different provider.
+- **`-y` / `--yes` flag and `--create-config` overwrite confirmation** -
+  `--create-config` now prompts before clobbering an existing config; pass `-y`
+  to skip the prompt.
+- **`--no-play` is now respected** - the config-merge expression that was
+  silently coercing it back to `True` has been fixed.
+- **Internal package renamed `src/` → `par_cli_tts/`** - no public CLI/API
+  change; only affects direct internal imports.
+- **Dependency floors raised** to current upstream majors (elevenlabs 2.x,
+  openai 2.x, rich 15, typer 0.24, pytest 9, ruff 0.15).
 
 ### v0.4.1
 - **Claude Code output style installer** - New `install-claude-style` command to automatically set up TTS audio summaries
@@ -85,7 +110,7 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 
 ## Features
 
-- **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, and Kokoro ONNX with easy provider switching
+- **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, Kokoro ONNX, Deepgram (Aura / Aura-2), and Google Gemini with easy provider switching
 - **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
 - **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
 - **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
@@ -108,6 +133,8 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 - **ElevenLabs SDK** - Official ElevenLabs API client for high-quality voices
 - **OpenAI SDK** - Official OpenAI API client for TTS
 - **Kokoro ONNX** - Offline TTS with ONNX Runtime for fast inference
+- **Deepgram REST** - Direct httpx integration for Aura / Aura-2 voices (no SDK)
+- **Google Gemini REST** - `generateContent` audio modality with PCM→WAV wrapping (no SDK)
 - **Typer** - Modern CLI framework with automatic help generation
 - **Rich** - Terminal formatting and beautiful output
 - **Pydantic** - Data validation and settings management
@@ -384,25 +411,41 @@ Edit `~/.claude/output-styles/tts-summary.md` to personalize the experience:
 Create a configuration file to set your default preferences:
 
 ```bash
-# Create a sample config file
+# Create a sample config file (prompts before overwriting if one exists)
 par-tts --create-config
 
+# Skip the overwrite prompt with -y / --yes (e.g. for scripted setup)
+par-tts --create-config -y
+
 # Edit the config file
-$EDITOR ~/.config/par-tts/config.yaml
+$EDITOR ~/.config/par-tts/config.yaml      # macOS: ~/Library/Application\ Support/par-tts/config.yaml
 ```
 
 Example configuration file:
 
 ```yaml
-# Default provider (elevenlabs, openai, kokoro-onnx)
+# Default provider (elevenlabs, openai, kokoro-onnx, deepgram, gemini)
 provider: kokoro-onnx
 
-# Default voice
+# Legacy default voice. Only applied when the active provider matches `provider`
+# above — prefer the per-provider `voices:` mapping below for multi-provider use.
 voice: Rachel
+
+# Per-provider default voices (recommended). Each entry is used when that provider
+# is active (via -P/--provider, TTS_PROVIDER, or `provider` above), regardless of
+# which provider this file was originally written for. Takes precedence over `voice`.
+voices:
+  elevenlabs: Juniper
+  openai: nova
+  kokoro-onnx: af_sarah
+  deepgram: aura-2-thalia-en
+  gemini: Kore
 
 # API keys (optional - can also be set via environment variables)
 # elevenlabs_api_key: your-elevenlabs-api-key-here
 # openai_api_key: your-openai-api-key-here
+# deepgram_api_key: your-deepgram-api-key-here
+# gemini_api_key: your-google-gemini-api-key-here
 
 # Output settings
 output_dir: ~/Documents/audio
@@ -421,6 +464,17 @@ play_audio: true
 debug: false
 ```
 
+**Voice resolution order** (highest priority first):
+
+1. CLI `-v` / `--voice` or `TTS_VOICE_ID` env var
+2. `voices.<active-provider>` entry in the config file
+3. The legacy `voice` field, but only when the active provider equals `config.provider`
+4. Provider-specific env var (`ELEVENLABS_VOICE_ID`, `OPENAI_VOICE_ID`, `KOKORO_VOICE_ID`, `DEEPGRAM_VOICE_ID`, `GEMINI_VOICE_ID`)
+5. Built-in provider default
+
+This means switching providers with `-P openai` will pick the right voice for that
+provider — it will not silently inherit a voice ID belonging to a different one.
+
 ### Environment Variables
 
 Create a `.env` file in your project directory with your API keys:
@@ -429,19 +483,23 @@ Create a `.env` file in your project directory with your API keys:
 # Required API keys (at least one for cloud providers)
 ELEVENLABS_API_KEY=your_elevenlabs_key_here
 OPENAI_API_KEY=your_openai_key_here
+DEEPGRAM_API_KEY=your_deepgram_key_here   # DG_API_KEY is also accepted
+GEMINI_API_KEY=your_gemini_key_here       # GOOGLE_API_KEY is also accepted
 
 # Optional: Kokoro ONNX model paths (auto-downloads if not set)
 # Set these only if you want to use custom model locations
 # KOKORO_MODEL_PATH=/path/to/kokoro-v1.0.onnx
 # KOKORO_VOICE_PATH=/path/to/voices-v1.0.bin
 
-# Optional: Default provider (elevenlabs, openai, or kokoro-onnx)
+# Optional: Default provider (elevenlabs, openai, kokoro-onnx, deepgram, or gemini)
 TTS_PROVIDER=kokoro-onnx
 
 # Optional: Default voices
-ELEVENLABS_VOICE_ID=Juniper  # or use voice ID
-OPENAI_VOICE_ID=nova        # alloy, echo, fable, onyx, nova, shimmer
-KOKORO_VOICE_ID=af_sarah    # See available voices with --list
+ELEVENLABS_VOICE_ID=Juniper            # or use voice ID
+OPENAI_VOICE_ID=nova                   # alloy, echo, fable, onyx, nova, shimmer, ...
+KOKORO_VOICE_ID=af_sarah               # See available voices with --list
+DEEPGRAM_VOICE_ID=aura-2-thalia-en     # Aura/Aura-2 model ID (the model IS the voice)
+GEMINI_VOICE_ID=Kore                   # One of 30 prebuilt names (Kore, Zephyr, Aoede, ...)
 
 # Optional: General voice (overrides provider-specific)
 TTS_VOICE_ID=Juniper
@@ -630,7 +688,7 @@ make clear-cache     # Clear voice cache including samples
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `text` | | Text to convert to speech (required) | |
-| `--provider` | `-P` | TTS provider to use (elevenlabs, openai, kokoro-onnx) | kokoro-onnx |
+| `--provider` | `-P` | TTS provider to use (elevenlabs, openai, kokoro-onnx, deepgram, gemini) | kokoro-onnx |
 | `--voice` | `-v` | Voice name or ID to use | Provider default |
 | `--output` | `-o` | Output file path | None (temp file) |
 | `--model` | `-m` | Model to use (provider-specific) | Provider default |
@@ -675,7 +733,8 @@ make clear-cache     # Clear voice cache including samples
 | `--list` | `-l` | List available voices for provider | False |
 | `--preview-voice` | `-V` | Preview a voice with sample text | None |
 | `--list-providers` | `-L` | List available TTS providers | False |
-| `--create-config` | | Create sample configuration file | False |
+| `--create-config` | | Create sample configuration file (prompts before overwriting) | False |
+| `--yes` | `-y` | Skip confirmation prompts (e.g. config overwrite) | False |
 | `--refresh-cache` | | Force refresh voice cache (ElevenLabs) | False |
 | `--clear-cache-samples` | | Clear cached voice samples | False |
 
@@ -742,6 +801,42 @@ make clear-cache     # Clear voice cache including samples
   - No API key needed - runs entirely locally
   - Manual download available via `par-tts-kokoro download`
 
+### Deepgram
+
+- **Models / Voices**: Aura and Aura-2 lines (model and voice are unified — the model
+  parameter *is* the voice). Default: `aura-2-thalia-en`.
+- **Languages**: English, Spanish, Dutch, French, German, Italian, Japanese
+- **Features**:
+  - REST `/v1/speak` integration via httpx (no SDK)
+  - Streaming chunked download — audio writes to file as it arrives
+  - Voice resolution accepts the full ID (`aura-2-thalia-en`), an ID prefix
+    (`aura-2-thalia`), or just the speaker name (`thalia`); name lookup prefers
+    Aura-2 English, then any Aura-2, then Aura-1
+- **Output Formats**: mp3 (default), wav, flac, opus, aac
+- **API key**: `deepgram_api_key` in config, or `DEEPGRAM_API_KEY` /
+  `DG_API_KEY` env var (the historical Deepgram name is also accepted).
+  Get a key at <https://console.deepgram.com>.
+
+### Google Gemini
+
+- **Models**: `gemini-2.5-flash-preview-tts` (default), `gemini-2.5-pro-preview-tts`
+- **Voices**: 30 prebuilt voices with style descriptors — Zephyr (Bright),
+  Puck (Upbeat), Kore (Firm, default), Aoede (Breezy), Fenrir (Excitable),
+  Leda (Youthful), Charon (Informative), Algieba (Smooth), and more.
+  Run `par-tts -P gemini --list` for the full table.
+- **Features**:
+  - REST `generateContent` integration via httpx (no SDK)
+  - Single-shot response (not chunked); the provider wraps the raw 24 kHz
+    16-bit mono PCM in a 44-byte RIFF/WAVE header so output is a self-contained
+    `.wav` file
+  - Voice names are case-insensitive on input (`kore`, `Kore`, and `KORE` all
+    resolve to the canonical `Kore`)
+- **Output Formats**: wav (PCM is the only modality the API emits)
+- **API key**: `gemini_api_key` in config, or one of `GEMINI_API_KEY` /
+  `GOOGLE_API_KEY` env vars. Get a free key at
+  <https://aistudio.google.com/apikey>. (TTS models are currently in preview;
+  rate limits and pricing follow the Gemini API tiers.)
+
 ## Cache Locations
 
 The ElevenLabs voice cache is stored in platform-specific directories:
@@ -806,7 +901,7 @@ make clean       # Clean build artifacts
 
 ```
 par-cli-tts/
-├── src/
+├── par_cli_tts/
 │   ├── __init__.py
 │   ├── tts_cli.py           # Main CLI application
 │   ├── voice_cache.py       # Voice caching system

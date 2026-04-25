@@ -1,6 +1,6 @@
 {
   "include": [
-    "src/**/*.py"
+    "par_cli_tts/**/*.py"
   ],
   "exclude": [
     "**/node_modules",

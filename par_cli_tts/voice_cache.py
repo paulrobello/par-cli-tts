@@ -15,8 +15,8 @@ import platformdirs
 import yaml
 from elevenlabs.client import ElevenLabs
 
-from src.console import console
-from src.utils import looks_like_voice_id
+from par_cli_tts.console import console
+from par_cli_tts.utils import looks_like_voice_id
 
 CACHE_EXPIRY_DAYS = 7  # Cache expires after 7 days
 CACHE_CHECK_INTERVAL_HOURS = 24  # Check for changes every 24 hours
