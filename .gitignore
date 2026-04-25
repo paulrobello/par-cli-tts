@@ -95,10 +95,12 @@ claude_scratch/
 logs/
 *.log
 
-# Claude Code session state
+# Claude Code session state and artifacts
 .claude/.cc2cc-session-id
 .claude/scheduled_tasks.lock
 .claude/statusline-*.local.json
+.claude/settings.local.json
+.claude/*.local.json
 
 # Documentation builds
 docs/_build/

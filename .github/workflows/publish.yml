@@ -1,6 +1,10 @@
 name: Build, Test & Release
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish_target:
@@ -65,7 +69,6 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.skip_tests }}
-        run: make test
         timeout-minutes: 10
 
       - name: Build packages

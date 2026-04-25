@@ -9,7 +9,14 @@ from typing import Any
 
 @dataclass
 class Voice:
-    """Represents a TTS voice."""
+    """Represents a TTS voice.
+
+    Attributes:
+        id: Provider-specific voice identifier (e.g. ``"aura-2-thalia-en"``).
+        name: Human-readable voice name (e.g. ``"Thalia"``).
+        labels: Optional tags describing voice traits (language, accent, style).
+        category: Optional grouping label (e.g. ``"Deepgram Aura-2 (en)"``).
+    """
 
     id: str
     name: str
@@ -20,6 +27,12 @@ class Voice:
 class TTSProvider(ABC):
     """Abstract base class for TTS providers."""
 
+    # Subclasses override this to declare which kwargs they accept for
+    # ``generate_speech()``.  Keys are kwarg names; values are defaults.
+    # The CLI uses this mapping to build provider-specific option dicts
+    # without if/elif chains.
+    PROVIDER_KWARGS: dict[str, Any] = {}
+
     def __init__(self, api_key: str | None = None, **kwargs: Any):
         """
         Initialize the TTS provider.
@@ -29,7 +42,6 @@ class TTSProvider(ABC):
             **kwargs: Additional provider-specific configuration.
         """
         self.api_key = api_key
-        self.config = kwargs
 
     @abstractmethod
     def generate_speech(
@@ -79,16 +91,22 @@ class TTSProvider(ABC):
         """
         pass
 
-    @abstractmethod
     def save_audio(self, audio_data: bytes | Iterator[bytes], file_path: str | Path) -> None:
-        """
-        Save audio data to a file.
+        """Save audio data to a file.
+
+        Handles both bytes and iterator inputs.  Providers that need
+        special handling (e.g. ElevenLabs SDK ``save``) can override.
 
         Args:
             audio_data: Audio data to save (bytes or iterator for streaming).
             file_path: Path to save the audio file.
         """
-        pass
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(audio_data, bytes):
+            path.write_bytes(audio_data)
+        else:
+            self.stream_to_file(audio_data, path)
 
     def stream_to_file(self, audio_stream: Iterator[bytes], file_path: str | Path) -> None:
         """
@@ -102,16 +120,24 @@ class TTSProvider(ABC):
 
         stream_to_file(audio_stream, file_path)
 
-    @abstractmethod
     def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        """
-        Play audio data.
+        """Play audio data with volume control.
+
+        Converts iterator to bytes if needed, then plays via the system
+        audio player.  Providers can override for custom playback.
 
         Args:
             audio_data: Audio data to play (bytes or iterator).
             volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
         """
-        pass
+        from par_tts.audio import play_audio_bytes
+
+        if not isinstance(audio_data, bytes):
+            audio_data = b"".join(audio_data)
+
+        # Determine file suffix from supported formats (first entry is default).
+        suffix = f".{self.supported_formats[0]}" if self.supported_formats else ".mp3"
+        play_audio_bytes(audio_data, volume=volume, suffix=suffix)
 
     @property
     @abstractmethod
@@ -136,16 +162,6 @@ class TTSProvider(ABC):
     def default_voice(self) -> str:
         """Default voice for this provider."""
         pass
-
-
-@dataclass
-class SpeechResult:
-    """Structured result from speech generation."""
-
-    audio: bytes | Iterator[bytes]
-    content_type: str = "audio/mp3"
-    sample_rate: int | None = None
-    format: str | None = None
 
 
 @dataclass
@@ -184,4 +200,11 @@ class DeepgramOptions:
 
 @dataclass
 class GeminiOptions:
-    """Gemini-specific generation options."""
+    """Gemini-specific generation options.
+
+    The Gemini TTS preview API currently offers no tunable generation
+    parameters beyond voice and model selection.  This dataclass is
+    reserved for future options (e.g. speaking_rate when the API adds it).
+    """
+
+    pass

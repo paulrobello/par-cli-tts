@@ -3,7 +3,7 @@
 import hashlib
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
 
 
 def stream_to_file(audio_stream: Iterator[bytes], file_path: str | Path) -> None:
@@ -17,17 +17,6 @@ def stream_to_file(audio_stream: Iterator[bytes], file_path: str | Path) -> None
     with open(file_path, "wb") as f:
         for chunk in audio_stream:
             f.write(chunk)
-
-
-def write_with_stream(file_handle: BinaryIO, audio_stream: Iterator[bytes]) -> None:
-    """Write audio stream to an already open file handle.
-
-    Args:
-        file_handle: Open binary file handle.
-        audio_stream: Iterator yielding audio data chunks.
-    """
-    for chunk in audio_stream:
-        file_handle.write(chunk)
 
 
 def sanitize_debug_output(data: dict[str, Any]) -> dict[str, Any]:

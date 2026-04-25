@@ -1,6 +1,6 @@
 # Documentation Style Guide
 
-This guide establishes standards and best practices for creating and maintaining documentation in the Par Terminal Emulator project. It ensures consistency, clarity, and professionalism across all technical documentation.
+This guide establishes standards and best practices for creating and maintaining documentation in the PAR CLI TTS project. It ensures consistency, clarity, and professionalism across all technical documentation.
 
 ## Table of Contents
 - [Quick Reference](#quick-reference)
@@ -605,22 +605,8 @@ sequenceDiagram
 
 ```
 docs/
-├── README.md                    # Documentation index
-├── DOCUMENTATION_STYLE_GUIDE.md # This guide
-├── architecture/                # System design documents
-│   ├── SYSTEM_OVERVIEW.md
-│   ├── DATABASE_SCHEMA.md
-│   └── API_ARCHITECTURE.md
-├── guides/                      # How-to and tutorials
-│   ├── QUICKSTART.md
-│   ├── DEPLOYMENT_GUIDE.md
-│   └── TROUBLESHOOTING.md
-├── api/                        # API documentation
-│   ├── REST_API.md
-│   ├── WEBSOCKET_API.md
-│   └── examples/
-└── diagrams/                   # Standalone diagram sources
-    └── system-flow.mmd
+├── ARCHITECTURE.md              # System architecture and design
+└── DOCUMENTATION_STYLE_GUIDE.md # This guide
 ```
 
 ### File Naming Conventions

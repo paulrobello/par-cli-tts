@@ -57,7 +57,10 @@ def _find_windows_audio_player() -> str | None:
     if shutil.which("ffplay"):
         return "ffplay"
 
-    # VLC media player
+    # VLC media player — check PATH first, then common install locations.
+    if shutil.which("vlc"):
+        return "vlc"
+
     vlc_paths = [
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
         r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
@@ -92,38 +95,36 @@ def _play_with_powershell(file_path: Path, volume: float, timeout: int = 60) -> 
     # MediaPlayer volume is 0.0 to 1.0, cap values above 1.0
     media_volume = min(volume, 1.0)
 
-    # PowerShell script using MediaPlayer COM object
-    ps_script = f"""
-$file = "{file_path}"
-$volume = {media_volume}
-
-$player = New-Object -ComObject MediaPlayer.MediaPlayer
-$player.Open($file)
-$player.Volume = $volume
-
-# Wait for media to be ready
-while ($player.ReadyState -lt 3) {{
-    Start-Sleep -Milliseconds 100
-}}
-
-# Get duration and wait for playback
-$duration = $player.Duration
-if ($duration -gt 0) {{
-    $player.Play()
-    Start-Sleep -Seconds $duration
-}} else {{
-    # If duration not available, wait up to {timeout} seconds
-    $player.Play()
-    Start-Sleep -Seconds {timeout}
-}}
-
-$player.Close()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($player) | Out-Null
-"""
+    # Pass the file path as a subprocess parameter to avoid command injection.
+    # The path is passed as a -Command argument where PowerShell treats it as a
+    # literal string via $args[0], never interpolating it into script text.
+    ps_script = (
+        "$file = $args[0]; "
+        "$volume = $args[1]; "
+        "$timeout = [int]$args[2]; "
+        "$player = New-Object -ComObject MediaPlayer.MediaPlayer; "
+        "$player.Open($file); "
+        "$player.Volume = $volume; "
+        "while ($player.ReadyState -lt 3) { Start-Sleep -Milliseconds 100 }; "
+        "$duration = $player.Duration; "
+        "if ($duration -gt 0) { $player.Play(); Start-Sleep -Seconds $duration } "
+        "else { $player.Play(); Start-Sleep -Seconds $timeout }; "
+        "$player.Close(); "
+        "[System.Runtime.InteropServices.Marshal]::ReleaseComObject($player) | Out-Null"
+    )
 
     try:
         subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                ps_script,
+                str(file_path),
+                str(media_volume),
+                str(timeout),
+            ],
             check=True,
             timeout=timeout + 10,  # Extra buffer for startup/shutdown
         )

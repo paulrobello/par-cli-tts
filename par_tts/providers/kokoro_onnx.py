@@ -1,14 +1,12 @@
 """Kokoro ONNX TTS provider."""
 
+import io
 import os
-import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
-from par_tts.audio import play_audio_bytes
 from par_tts.defaults import DEFAULT_KOKORO_VOICE
 from par_tts.model_downloader import ModelDownloader
 
@@ -18,10 +16,17 @@ from .base import TTSProvider, Voice
 class KokoroONNXProvider(TTSProvider):
     """Kokoro ONNX TTS provider implementation."""
 
-    def __init__(self, model_path: str | None = None, voice_path: str | None = None):
+    PROVIDER_KWARGS = {
+        "speed": 1.0,
+        "lang": "en-us",
+    }
+
+    def __init__(self, api_key: str | None = None, model_path: str | None = None, voice_path: str | None = None):
         """Initialize Kokoro ONNX provider.
 
         Args:
+            api_key: Ignored (offline provider). Accepted for signature
+                compatibility with the base class.
             model_path: Path to ONNX model file (kokoro-v1.0.onnx).
                        If not provided, will check KOKORO_MODEL_PATH env var,
                        then auto-download to XDG data directory if needed.
@@ -29,6 +34,7 @@ class KokoroONNXProvider(TTSProvider):
                        If not provided, will check KOKORO_VOICE_PATH env var,
                        then auto-download to XDG data directory if needed.
         """
+        super().__init__(api_key=api_key)
         # Check for explicitly provided paths or environment variables
         env_model_path = os.environ.get("KOKORO_MODEL_PATH")
         env_voice_path = os.environ.get("KOKORO_VOICE_PATH")
@@ -147,46 +153,7 @@ class KokoroONNXProvider(TTSProvider):
         # Generate audio
         samples, sample_rate = self.kokoro.create(text, voice=voice, speed=speed, lang=lang)
 
-        # Convert to requested format
-        with tempfile.NamedTemporaryFile(suffix=f".{output_format}", delete=False) as temp_file:
-            temp_path = temp_file.name
-
-        try:
-            # Save audio to temp file
-            sf.write(temp_path, samples, sample_rate)
-
-            # Read back as bytes
-            with open(temp_path, "rb") as f:
-                audio_data = f.read()
-
-            return audio_data
-        finally:
-            # Clean up temp file
-            if Path(temp_path).exists():
-                Path(temp_path).unlink()
-
-    def save_audio(self, audio_data: bytes, file_path: str, format: str | None = None) -> None:
-        """Save audio data to file.
-
-        Args:
-            audio_data: Audio data as bytes.
-            file_path: Path to save the audio file.
-            format: Audio format (inferred from file extension if not provided).
-        """
-        # For Kokoro, audio_data is already in the correct format
-        # Just write it directly
-        with open(file_path, "wb") as f:
-            f.write(audio_data)
-
-    def play_audio(self, audio_data: bytes | Iterator[bytes], volume: float = 1.0) -> None:
-        """Play audio data with volume control.
-
-        Args:
-            audio_data: Audio data as bytes or iterator.
-            volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double volume).
-        """
-        # Convert iterator to bytes if needed
-        if not isinstance(audio_data, bytes):
-            audio_data = b"".join(audio_data)
-
-        play_audio_bytes(audio_data, volume=volume, suffix=".wav")
+        # Write to an in-memory buffer instead of a temp file
+        buf = io.BytesIO()
+        sf.write(samples, buf, sample_rate, format=output_format.upper())
+        return buf.getvalue()

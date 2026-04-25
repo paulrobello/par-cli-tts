@@ -2,10 +2,20 @@
 
 import logging
 import sys
+from contextvars import ContextVar
 from enum import Enum
 from typing import NoReturn
 
 _logger = logging.getLogger(__name__)
+
+# Thread-safe, library-safe debug flag.  The CLI sets this at startup;
+# library callers can also toggle it via ``set_debug_mode()``.
+_debug_mode: ContextVar[bool] = ContextVar("_debug_mode", default=False)
+
+
+def set_debug_mode(enabled: bool) -> None:
+    """Set the global debug mode flag (thread-safe via ContextVar)."""
+    _debug_mode.set(enabled)
 
 
 class ErrorType(Enum):
@@ -65,7 +75,7 @@ def handle_error(
     """
     _logger.error("%s: %s", error_type.display_name, message)
 
-    if exception and hasattr(sys, "_debug_mode") and sys._debug_mode:  # type: ignore
+    if exception and _debug_mode.get():
         _logger.debug("Debug: %s: %s", type(exception).__name__, exception)
 
     if exit_on_error:
@@ -75,6 +85,20 @@ def handle_error(
 
 
 def validate_api_key(api_key: str | None, provider: str) -> None:
+    """Validate that an API key is provided for cloud providers.
+
+    Offline providers (kokoro-onnx) do not require an API key and skip
+    validation.  For all other providers, a missing or empty key raises
+    TTSError with ErrorType.MISSING_API_KEY.
+
+    Args:
+        api_key: The API key string, or None if not provided.
+        provider: Provider identifier (e.g. ``"elevenlabs"``, ``"openai"``,
+            ``"kokoro-onnx"``).
+
+    Raises:
+        TTSError: If *api_key* is falsy and *provider* is not kokoro-onnx.
+    """
     if provider == "kokoro-onnx":
         return
 
@@ -86,6 +110,19 @@ def validate_api_key(api_key: str | None, provider: str) -> None:
 
 
 def validate_file_path(file_path: str, must_exist: bool = True) -> None:
+    """Validate a file path for security and existence.
+
+    Resolves the path to an absolute form and optionally checks that it
+    exists on disk.  Invalid or missing paths raise TTSError.
+
+    Args:
+        file_path: The file path string to validate.
+        must_exist: If True (default), raise an error when the file does
+            not exist on disk.
+
+    Raises:
+        TTSError: If the path is invalid or the file is not found.
+    """
     from pathlib import Path
 
     path = Path(file_path)
@@ -97,19 +134,3 @@ def validate_file_path(file_path: str, must_exist: bool = True) -> None:
 
     if must_exist and not path.exists():
         handle_error(f"File not found: {file_path}", ErrorType.FILE_NOT_FOUND)
-
-
-def wrap_provider_error(func):
-    from functools import wraps
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except TTSError:
-            raise
-        except Exception as e:
-            provider_name = getattr(args[0], "name", "Provider") if args else "Provider"
-            handle_error(f"{provider_name} error: {str(e)}", ErrorType.PROVIDER_ERROR, exception=e)
-
-    return wrapper
