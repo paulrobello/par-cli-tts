@@ -1,56 +1,200 @@
-name: Publish 🐍 📦 to PyPI
+name: Build, Test & Release
 
 on:
   workflow_dispatch:
-  workflow_call:
-  release:
-    types: [ published ]
+    inputs:
+      publish_target:
+        description: "Publish target"
+        required: true
+        default: "testpypi"
+        type: choice
+        options:
+          - testpypi
+          - pypi
+          - both
+      create_release:
+        description: "Create GitHub Release"
+        required: false
+        default: false
+        type: boolean
+      skip_tests:
+        description: "Skip lint/typecheck/tests"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  setup:
-    uses: ./.github/workflows/reusable-setup.yml
-
-  publish-to-pypi:
-    if: github.event_name == 'workflow_dispatch'  # Only allow manual triggers
-    name: Publish 🐍 distribution 📦 to PyPI
+  # ── Build & Quality Checks ───────────────────────────────────────────
+  build:
+    name: Build & Check
     runs-on: ubuntu-latest
-    needs: setup
-    environment:
-      name: pypi
-      url: https://pypi.org/p/par-cli-tts
-    permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Restore cached build artifacts
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: dist
-          key: dist-${{ runner.os }}-3.13-x64-${{ hashFiles('**/pyproject.toml', 'src/**/*.py') }}-${{ github.sha }}
-          restore-keys: |
-            dist-${{ runner.os }}-3.13-x64-${{ hashFiles('**/pyproject.toml', 'src/**/*.py') }}-
-            dist-${{ runner.os }}-3.13-x64-
-          fail-on-cache-miss: false
+      - name: Install dependencies
+        run: uv sync --frozen
+        timeout-minutes: 10
 
-      - name: Build package if cache miss
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Extract version
+        id: version
+        run: |
+          version=$(uv run python -c "from par_tts import __version__; print(__version__)")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Version: $version"
+
+      - name: Typecheck
+        if: ${{ !inputs.skip_tests }}
+        run: make typecheck
+        timeout-minutes: 15
+
+      - name: Lint
+        if: ${{ !inputs.skip_tests }}
+        run: make lint
+        timeout-minutes: 10
+
+      - name: Test
+        if: ${{ !inputs.skip_tests }}
+        run: make test
+        timeout-minutes: 10
+
+      - name: Build packages
         run: make package-all
         timeout-minutes: 15
 
-      - name: Publish distribution 📦 to PyPI
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+  # ── Publish to TestPyPI ──────────────────────────────────────────────
+  publish-testpypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: inputs.publish_target == 'testpypi' || inputs.publish_target == 'both'
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/par-cli-tts
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
 
       - name: Discord notification
+        if: env.DISCORD_WEBHOOK != ''
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: 'The project {{ EVENT_PAYLOAD.repository.full_name }} ${{ needs.setup.outputs.version }} has been published to PyPI.'
+          args: "par-cli-tts v${{ needs.build.outputs.version }} published to TestPyPI"
+        continue-on-error: true
+
+  # ── Publish to PyPI ──────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: inputs.publish_target == 'pypi' || inputs.publish_target == 'both'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/par-cli-tts
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Discord notification
+        if: env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: "par-cli-tts v${{ needs.build.outputs.version }} published to PyPI"
+        continue-on-error: true
+
+  # ── GitHub Release ───────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: inputs.create_release == true
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Sign dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release create \
+            "v${{ needs.build.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --generate-notes \
+            --latest
+
+      - name: Upload artifacts to release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "v${{ needs.build.outputs.version }}" \
+            dist/** \
+            --repo "${{ github.repository }}"
+
+      - name: Discord notification
+        if: env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: "par-cli-tts v${{ needs.build.outputs.version }} released on GitHub"
         continue-on-error: true
