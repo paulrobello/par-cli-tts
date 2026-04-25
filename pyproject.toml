@@ -61,9 +61,9 @@ Discussions = "https://github.com/paulrobello/par-cli-tts/discussions"
 Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
 
 [project.scripts]
-par-tts = "par_cli_tts.tts_cli:app"
-par-tts-kokoro = "par_cli_tts.kokoro_cli:app"
-par-tts-install-style = "par_cli_tts.install_claude_style:app"
+par-tts = "par_tts.cli.tts_cli:app"
+par-tts-kokoro = "par_tts.cli.kokoro_cli:app"
+par-tts-install-style = "par_tts.cli.install_claude_style:app"
 
 [build-system]
 requires = [
@@ -85,17 +85,17 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=par_cli_tts --cov-report=term-missing"
+addopts = "-v --cov=par_tts --cov-report=term-missing"
 
 [tool.hatch.version]
-path = "par_cli_tts/__init__.py"
+path = "par_tts/__init__.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "par_cli_tts",
+    "par_tts",
 ]
 include = [
     "py.typed",
@@ -105,7 +105,7 @@ include = [
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "par_cli_tts",
+    "par_tts",
     ".claude",
     "LICENSE",
     "README.md",
