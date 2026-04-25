@@ -46,8 +46,23 @@ def handle_error(
     message: str,
     error_type: ErrorType = ErrorType.PROVIDER_ERROR,
     exception: Exception | None = None,
-    exit_on_error: bool = True,
-) -> NoReturn | None:
+    exit_on_error: bool = False,
+) -> NoReturn:
+    """Log an error and raise TTSError (or sys.exit in legacy mode).
+
+    In library mode (default), raises TTSError so callers can catch and handle
+    errors programmatically.  When *exit_on_error* is True the process calls
+    ``sys.exit()`` instead -- this is retained for the CLI layer's use.
+
+    Args:
+        message: Human-readable error description.
+        error_type: Categorised error type carrying an exit-code.
+        exception: Optional original exception for debug logging.
+        exit_on_error: If True, call ``sys.exit()`` instead of raising.
+
+    Raises:
+        TTSError: Always, unless *exit_on_error* is True.
+    """
     _logger.error("%s: %s", error_type.display_name, message)
 
     if exception and hasattr(sys, "_debug_mode") and sys._debug_mode:  # type: ignore
@@ -56,7 +71,7 @@ def handle_error(
     if exit_on_error:
         sys.exit(error_type.exit_code)
 
-    return None
+    raise TTSError(message, error_type)
 
 
 def validate_api_key(api_key: str | None, provider: str) -> None:

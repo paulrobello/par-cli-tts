@@ -67,7 +67,7 @@ Discussions = "https://github.com/paulrobello/par-cli-tts/discussions"
 Wiki = "https://github.com/paulrobello/par-cli-tts/wiki"
 
 [project.scripts]
-par-tts = "par_tts.cli.tts_cli:app"
+par-tts = "par_tts.cli.tts_cli:_run_cli"
 par-tts-kokoro = "par_tts.cli.kokoro_cli:app"
 par-tts-install-style = "par_tts.cli.install_claude_style:app"
 

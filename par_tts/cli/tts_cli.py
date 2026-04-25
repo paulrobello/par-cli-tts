@@ -22,10 +22,25 @@ from rich.table import Table
 from par_tts.cli.config_file import ConfigManager
 from par_tts.cli.console import console
 from par_tts.defaults import DEFAULT_PROVIDER, get_default_voice
-from par_tts.errors import ErrorType, handle_error, validate_api_key, validate_file_path
+from par_tts.errors import ErrorType, TTSError, handle_error, validate_api_key, validate_file_path
 from par_tts.providers import PROVIDERS, TTSProvider
 
 app = typer.Typer(help="Text-to-speech command line tool with multiple provider support")
+
+
+def _run_cli() -> None:
+    """Invoke the Typer app, catching TTSError and translating to sys.exit().
+
+    Library code raises :class:`TTSError` instead of calling ``sys.exit()`` so
+    that programmatic users can handle errors gracefully.  This wrapper is the
+    CLI boundary: it catches those exceptions, prints a user-friendly message,
+    and exits with the appropriate code.
+    """
+    try:
+        app()
+    except TTSError as exc:
+        console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+        sys.exit(exc.error_type.exit_code)
 
 
 def get_api_key(provider: str, config_file: Any = None) -> str | None:
@@ -40,7 +55,7 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
         API key string or None for providers that don't need one.
 
     Raises:
-        SystemExit: If API key is not found anywhere.
+        TTSError: If API key is not found anywhere.
     """
     # kokoro-onnx doesn't need an API key
     if provider == "kokoro-onnx":
@@ -58,7 +73,6 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
 
     if provider not in key_map:
         handle_error(f"Unknown provider '{provider}'", ErrorType.INVALID_PROVIDER)
-        return None  # For type checker, never reached
 
     config_field, *env_vars = key_map[provider]
 
@@ -80,7 +94,6 @@ def get_api_key(provider: str, config_file: Any = None) -> str | None:
         f"{primary} not found. Please set {primary}{alt} in your config file or environment",
         ErrorType.MISSING_API_KEY,
     )
-    return None  # never reached; handle_error exits
 
 
 def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) -> TTSProvider:
@@ -96,7 +109,7 @@ def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) 
         Initialized TTS provider.
 
     Raises:
-        SystemExit: If provider is not found or cannot be initialized.
+        TTSError: If provider is not found or cannot be initialized.
     """
     if provider_name not in PROVIDERS:
         handle_error(
@@ -115,7 +128,6 @@ def create_provider(provider_name: str, config_file: Any = None, **kwargs: Any) 
             return provider_class(api_key, **kwargs)
     except Exception as e:
         handle_error(f"Failed to initialize {provider_name} provider", ErrorType.PROVIDER_ERROR, exception=e)
-        raise  # Re-raise for type checker
 
 
 def get_provider_kwargs(
@@ -198,7 +210,7 @@ def handle_input_operations(
         Processed text or None if not applicable.
 
     Raises:
-        SystemExit: If text is required but not provided.
+        TTSError: If text is required but not provided.
     """
     if text_required and text is None:
         # Check if stdin has data
@@ -965,7 +977,6 @@ def main(
     # Handle speech generation
     if not text:
         handle_error("No text provided for speech generation", ErrorType.INVALID_INPUT)
-        return
 
     handle_speech_generation(
         text=text,
@@ -989,4 +1000,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    _run_cli()
