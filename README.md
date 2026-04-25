@@ -5,10 +5,13 @@
 ![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-0.4.1-green.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-green.svg)
 ![Development Status](https://img.shields.io/badge/status-stable-green.svg)
 
-A powerful command-line text-to-speech tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini) with intelligent voice caching, name resolution, and flexible output options.
+A text-to-speech library and command-line tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini) with intelligent voice caching, name resolution, and flexible output options.
+
+**Use as a CLI** — `par-tts "Hello world"`
+**Use as a library** — `from par_tts import get_provider`
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
@@ -40,7 +43,18 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
 
 ## What's New
 
-### Unreleased
+### v0.5.0
+- **Library API surface** — `import par_tts` is now a proper Python library with
+  `get_provider()`, `list_providers()`, typed per-provider options, and `SpeechResult`.
+  See [Library Usage](#library-usage) for examples.
+- **Import package renamed** — canonical import is now `par_tts` (was `par_cli_tts`).
+  Old imports still work with a deprecation warning.
+- **Decoupled from Rich** — library modules use `stdlib logging` instead of Rich
+  console, enabling headless/embedded use without Rich installed.
+- **Audio playback extracted** — `play_audio_bytes` and `play_audio_with_player`
+  moved to dedicated `par_tts.audio` module.
+
+### v0.4.2
 - **Google Gemini TTS provider** - Added `-P gemini` with all 30 prebuilt voices
   (Zephyr, Puck, Kore, Aoede, …) via the `generateContent` audio modality. The
   API returns raw 24 kHz 16-bit mono PCM; the provider wraps it in a WAV header
@@ -60,10 +74,6 @@ A powerful command-line text-to-speech tool supporting multiple TTS providers (E
   to skip the prompt.
 - **`--no-play` is now respected** - the config-merge expression that was
   silently coercing it back to `True` has been fixed.
-- **Internal package renamed `src/` → `par_cli_tts/`** - no public CLI/API
-  change; only affects direct internal imports.
-- **Dependency floors raised** to current upstream majors (elevenlabs 2.x,
-  openai 2.x, rich 15, typer 0.24, pytest 9, ruff 0.15).
 
 ### v0.4.1
 - **Claude Code output style installer** - New `install-claude-style` command to automatically set up TTS audio summaries
@@ -507,6 +517,52 @@ TTS_VOICE_ID=Juniper
 
 ## Usage
 
+### Library Usage
+
+PAR TTS can be used as a Python library in your own projects:
+
+```python
+from par_tts import get_provider, list_providers, Voice
+
+# List available providers
+print(list_providers())
+# ['deepgram', 'elevenlabs', 'gemini', 'kokoro-onnx', 'openai']
+
+# Get a provider class and instantiate it
+KokoroTTS = get_provider("kokoro-onnx")
+provider = KokoroTTS()  # no API key needed for offline providers
+
+# Generate speech
+audio = provider.generate_speech("Hello world", voice="af_sarah")
+
+# Save to file
+provider.save_audio(audio, "output.wav")
+
+# List available voices
+voices: list[Voice] = provider.list_voices()
+for voice in voices:
+    print(f"  {voice.id}: {voice.name}")
+
+# Resolve a voice name to an ID
+voice_id = provider.resolve_voice("sarah")  # partial match -> "af_sarah"
+```
+
+Cloud providers require an API key:
+
+```python
+from par_tts import get_provider
+
+OpenAITTS = get_provider("openai")
+provider = OpenAITTS(api_key="sk-...")
+
+audio = provider.generate_speech(
+    "Hello from OpenAI",
+    voice="nova",
+    speed=1.2,
+)
+provider.save_audio(audio, "greeting.mp3")
+```
+
 ### Quick Start
 
 If installed from PyPI:
@@ -901,32 +957,37 @@ make clean       # Clean build artifacts
 
 ```
 par-cli-tts/
-├── par_cli_tts/
-│   ├── __init__.py
-│   ├── tts_cli.py           # Main CLI application
-│   ├── voice_cache.py       # Voice caching system
-│   ├── model_downloader.py  # Kokoro model download manager
-│   ├── utils.py             # Utility functions (streaming, security)
-│   ├── config.py            # Configuration dataclasses
-│   ├── config_file.py       # Configuration file management
-│   ├── errors.py            # Error handling utilities
-│   └── providers/           # TTS provider implementations
+├── par_tts/                     # Library package (pip install par-cli-tts)
+│   ├── __init__.py              # Public API: get_provider, list_providers
+│   ├── audio.py                 # Audio playback utilities
+│   ├── defaults.py              # Default values for providers
+│   ├── errors.py                # TTSError, ErrorType, handle_error
+│   ├── http_client.py           # HTTP client factory
+│   ├── utils.py                 # Streaming, checksums, sanitization
+│   ├── voice_cache.py           # ElevenLabs voice caching
+│   ├── model_downloader.py      # Kokoro ONNX model management
+│   ├── providers/               # TTS provider implementations
+│   │   ├── __init__.py          # PROVIDERS registry
+│   │   ├── base.py              # TTSProvider ABC, Voice, SpeechResult, Options
+│   │   ├── elevenlabs.py        # ElevenLabs implementation
+│   │   ├── openai.py            # OpenAI implementation
+│   │   ├── kokoro_onnx.py       # Kokoro ONNX (offline) implementation
+│   │   ├── deepgram.py          # Deepgram implementation
+│   │   └── gemini.py            # Google Gemini implementation
+│   └── cli/                     # CLI-only code (not imported by library users)
 │       ├── __init__.py
-│       ├── base.py          # Abstract base provider
-│       ├── elevenlabs.py    # ElevenLabs implementation
-│       ├── openai.py        # OpenAI implementation
-│       └── kokoro_onnx.py   # Kokoro ONNX implementation
-├── docs/
-│   ├── ARCHITECTURE.md      # System architecture documentation
-│   └── CLAUDE.md            # Development guidelines
-├── .claude/
-│   └── output-styles/
-│       └── tts-summary.md   # Claude Code TTS output style
-├── .env.example             # Example environment file
-├── pyproject.toml           # Project configuration
-├── Makefile                 # Development commands
-├── CLAUDE.md                # AI assistant context
-└── README.md                # This file
+│       ├── tts_cli.py           # Main CLI application
+│       ├── kokoro_cli.py        # Kokoro model management CLI
+│       ├── install_claude_style.py  # Claude Code style installer
+│       ├── config_file.py       # ConfigManager (YAML)
+│       ├── config.py            # TTSConfig dataclass
+│       └── console.py           # Rich console instances
+├── par_cli_tts/                 # Compat shim (deprecated, re-exports par_tts)
+├── tests/
+├── pyproject.toml
+├── Makefile
+├── CLAUDE.md
+└── README.md
 ```
 
 ## Troubleshooting

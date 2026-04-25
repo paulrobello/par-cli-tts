@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Library API surface** — `par_tts` is now a proper importable Python library:
+  ```python
+  from par_tts import get_provider, list_providers
+
+  KokoroTTS = get_provider("kokoro-onnx")
+  provider = KokoroTTS()
+  audio = provider.generate_speech("Hello world", voice="af_sarah")
+  provider.save_audio(audio, "output.wav")
+  ```
+
+- **`SpeechResult` dataclass** — structured return type for `generate_speech` with
+  `audio`, `content_type`, optional `sample_rate` and `format` fields.
+
+- **Per-provider Options dataclasses** — typed configuration for each provider:
+  `ElevenLabsOptions`, `OpenAIOptions`, `KokoroOptions`, `DeepgramOptions`,
+  `GeminiOptions`. All importable from `par_tts` or `par_tts.providers.base`.
+
+- **`get_provider(name)` factory** — returns the provider class by name; raises
+  `ValueError` for unknown providers.
+
+- **`list_providers()` function** — returns a sorted list of all available provider
+  names.
+
 - **Google Gemini TTS provider** (`-P gemini`) — Gemini API
   `generateContent` with `responseModalities: ["AUDIO"]` integration via httpx
   (no SDK). All 30 prebuilt voices (Zephyr, Puck, Kore, Aoede, …) with style
@@ -32,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--create-config` to suppress the new overwrite prompt for scripted setup).
 
 - **Per-provider voice configuration** — new `voices:` mapping in `config.yaml`
-  - Keyed by provider name (`elevenlabs`, `openai`, `kokoro-onnx`)
+  - Keyed by provider name (`elevenlabs`, `openai`, `kokoro-onnx`, `deepgram`, `gemini`)
   - Used whenever that provider is active, regardless of which provider the config
     was originally written for (so `-P openai` no longer inherits an ElevenLabs voice ID)
   - Takes precedence over the legacy global `voice` field
@@ -43,18 +66,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       elevenlabs: Juniper
       openai: nova
       kokoro-onnx: af_sarah
+      deepgram: aura-2-thalia-en
+      gemini: Kore
     ```
 
 ### Changed
 
-- **Package layout** — internal package renamed from `src` to `par_cli_tts` for a
-  proper, importable PyPI-style name. No public CLI/API surface change; only
-  affects direct internal imports (e.g. `from par_cli_tts.providers.base import ...`).
+- **Import package renamed `par_cli_tts` → `par_tts`** — the canonical import path
+  is now `import par_tts`. The old `par_cli_tts` package remains as a compat shim
+  that re-exports everything with a `DeprecationWarning`. It will be removed in a
+  future release.
+
+- **CLI moved to `par_tts.cli`** — entrypoints now reference `par_tts.cli.tts_cli:app`
+  instead of `par_cli_tts.tts_cli:app`. No visible change for end users.
+
+- **Library modules decoupled from Rich** — providers, voice cache, model downloader,
+  and error handling now use `stdlib logging` instead of Rich console. This enables
+  headless/library use without Rich installed. The CLI layer configures logging
+  handlers with Rich formatters.
+
+- **Audio playback extracted to `par_tts.audio`** — `play_audio_bytes` and
+  `play_audio_with_player` are now in a dedicated module. Import from
+  `par_tts.audio` (library) or `par_tts.utils` (backward compat re-export).
+
 - **Dependency version floors raised** to current upstream majors:
-  - Runtime: `elevenlabs>=2.44`, `openai>=2.32`, `rich>=15`, `typer>=0.24`,
-    `python-dotenv>=1.2`, `platformdirs>=4.9`, `pyyaml>=6.0.3`
+  - Runtime: `httpx>=0.27`, `elevenlabs>=2.44`, `openai>=2.32`, `rich>=15`,
+    `typer>=0.24`, `python-dotenv>=1.2`, `platformdirs>=4.9`, `pyyaml>=6.0.3`
   - Dev: `pytest>=9`, `pytest-cov>=7`, `ruff>=0.15`, `pyright>=1.1.409`,
     `pre-commit>=4.6`, `build>=1.4`, `hatchling>=1.29`
+
+### Deprecated
+
+- **`par_cli_tts` import package** — importing from `par_cli_tts` now emits a
+  `DeprecationWarning`. Use `import par_tts` instead. The shim will be removed
+  in a future release.
 
 ### Fixed
 
