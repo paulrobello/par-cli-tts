@@ -4,7 +4,7 @@ from dataclasses import fields
 
 import pytest
 
-from par_cli_tts.providers.base import (
+from par_tts.providers.base import (
     ElevenLabsOptions,
     GeminiOptions,
     KokoroOptions,

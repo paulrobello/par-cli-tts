@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from par_cli_tts.utils import (
+from par_tts.utils import (
     calculate_file_checksum,
     looks_like_voice_id,
     sanitize_debug_output,

@@ -72,3 +72,23 @@ def test_audio_module_importable():
 def test_utils_module_importable():
     """Utility functions should be importable."""
     from par_tts.utils import looks_like_voice_id, stream_to_file
+
+
+def test_compat_shim_par_cli_tts():
+    """par_cli_tts should re-export everything from par_tts."""
+    import warnings
+
+    # Suppress the deprecation warning for this test
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        import par_cli_tts
+
+        assert hasattr(par_cli_tts, "TTSProvider")
+        assert hasattr(par_cli_tts, "Voice")
+        assert hasattr(par_cli_tts, "get_provider")
+        assert hasattr(par_cli_tts, "__version__")
+
+        from par_cli_tts.providers import PROVIDERS as shim_providers
+        from par_tts.providers import PROVIDERS
+
+        assert shim_providers is PROVIDERS

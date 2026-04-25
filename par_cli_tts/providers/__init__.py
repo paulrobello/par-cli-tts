@@ -1,41 +1,4 @@
-"""TTS Provider implementations."""
+"""Compatibility shim — use par_tts.providers instead."""
 
-from par_cli_tts.providers.base import (
-    DeepgramOptions,
-    ElevenLabsOptions,
-    GeminiOptions,
-    KokoroOptions,
-    OpenAIOptions,
-    SpeechResult,
-    TTSProvider,
-    Voice,
-)
-from par_cli_tts.providers.deepgram import DeepgramProvider
-from par_cli_tts.providers.elevenlabs import ElevenLabsProvider
-from par_cli_tts.providers.gemini import GeminiProvider
-from par_cli_tts.providers.kokoro_onnx import KokoroONNXProvider
-from par_cli_tts.providers.openai import OpenAIProvider
-
-__all__ = [
-    "TTSProvider",
-    "Voice",
-    "SpeechResult",
-    "ElevenLabsOptions",
-    "OpenAIOptions",
-    "KokoroOptions",
-    "DeepgramOptions",
-    "GeminiOptions",
-    "DeepgramProvider",
-    "ElevenLabsProvider",
-    "GeminiProvider",
-    "OpenAIProvider",
-    "KokoroONNXProvider",
-]
-
-PROVIDERS = {
-    "elevenlabs": ElevenLabsProvider,
-    "openai": OpenAIProvider,
-    "kokoro-onnx": KokoroONNXProvider,
-    "deepgram": DeepgramProvider,
-    "gemini": GeminiProvider,
-}
+from par_tts.providers import *  # noqa: F401,F403
+from par_tts.providers import PROVIDERS  # noqa: F401

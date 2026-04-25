@@ -96,6 +96,7 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = [
     "par_tts",
+    "par_cli_tts",
 ]
 include = [
     "py.typed",
@@ -106,6 +107,7 @@ include = [
 [tool.hatch.build.targets.sdist]
 include = [
     "par_tts",
+    "par_cli_tts",
     ".claude",
     "LICENSE",
     "README.md",

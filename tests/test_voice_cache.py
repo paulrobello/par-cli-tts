@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from par_cli_tts.utils import looks_like_voice_id
+from par_tts.utils import looks_like_voice_id
 
 
 class TestVoiceCache:
@@ -14,10 +14,10 @@ class TestVoiceCache:
 
     def test_is_expired_no_timestamp(self, temp_cache_dir, monkeypatch):
         """Cache with no timestamp should be expired."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -28,10 +28,10 @@ class TestVoiceCache:
 
     def test_is_expired_recent_cache(self, temp_cache_dir, monkeypatch):
         """Recent cache should not be expired."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -42,10 +42,10 @@ class TestVoiceCache:
 
     def test_is_expired_old_cache(self, temp_cache_dir, monkeypatch):
         """Cache older than expiry days should be expired."""
-        from par_cli_tts.voice_cache import VoiceCache, CACHE_EXPIRY_DAYS
+        from par_tts.voice_cache import VoiceCache, CACHE_EXPIRY_DAYS
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -57,10 +57,10 @@ class TestVoiceCache:
 
     def test_get_voice_by_name_exact_match(self, temp_cache_dir, monkeypatch, sample_voice_data):
         """Should find voice by exact name match."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -73,10 +73,10 @@ class TestVoiceCache:
 
     def test_get_voice_by_name_partial_match(self, temp_cache_dir, monkeypatch, sample_voice_data):
         """Should find voice by partial name match."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -89,10 +89,10 @@ class TestVoiceCache:
 
     def test_get_voice_by_name_case_insensitive(self, temp_cache_dir, monkeypatch, sample_voice_data):
         """Should find voice with case-insensitive matching."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -105,10 +105,10 @@ class TestVoiceCache:
 
     def test_get_voice_by_name_expired_cache(self, temp_cache_dir, monkeypatch, sample_voice_data):
         """Should return None for expired cache."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -121,10 +121,10 @@ class TestVoiceCache:
 
     def test_clear_cache(self, temp_cache_dir, monkeypatch):
         """Should clear cache data."""
-        from par_cli_tts.voice_cache import VoiceCache
+        from par_tts.voice_cache import VoiceCache
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -143,7 +143,7 @@ class TestResolveVoiceIdentifier:
 
     def test_returns_voice_id_unchanged(self, temp_cache_dir, monkeypatch):
         """Should return voice ID unchanged if it looks like an ID."""
-        from par_cli_tts.voice_cache import resolve_voice_identifier
+        from par_tts.voice_cache import resolve_voice_identifier
 
         # Voice IDs are 20+ alphanumeric characters
         voice_id = "abcdefghij1234567890"
@@ -152,10 +152,10 @@ class TestResolveVoiceIdentifier:
 
     def test_resolves_from_cache(self, temp_cache_dir, monkeypatch, mock_elevenlabs_client, sample_voice_data):
         """Should resolve voice name from cache."""
-        from par_cli_tts.voice_cache import VoiceCache, resolve_voice_identifier
+        from par_tts.voice_cache import VoiceCache, resolve_voice_identifier
 
         monkeypatch.setattr(
-            "par_cli_tts.voice_cache.platformdirs.user_cache_dir",
+            "par_tts.voice_cache.platformdirs.user_cache_dir",
             lambda _: str(temp_cache_dir)
         )
 
@@ -169,7 +169,7 @@ class TestResolveVoiceIdentifier:
 
     def test_raises_for_ambiguous_name(self, temp_cache_dir, monkeypatch):
         """Should raise ValueError for ambiguous voice names."""
-        from par_cli_tts.voice_cache import resolve_voice_identifier
+        from par_tts.voice_cache import resolve_voice_identifier
 
         # Setup mock client with multiple voices matching "Voice"
         client = MagicMock()
