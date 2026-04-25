@@ -3,6 +3,7 @@
 import io
 import os
 from pathlib import Path
+from typing import Any
 
 import soundfile as sf
 from kokoro_onnx import Kokoro
@@ -130,7 +131,7 @@ class KokoroONNXProvider(TTSProvider):
         raise ValueError(f"Voice '{voice_name}' not found. Available voices: {', '.join(available_voices)}")
 
     def generate_speech(
-        self, text: str, voice: str, model: str | None = None, output_format: str = "wav", **kwargs
+        self, text: str, voice: str, model: str | None = None, output_format: str = "wav", **kwargs: Any
     ) -> bytes:
         """Generate speech from text.
 
@@ -155,5 +156,5 @@ class KokoroONNXProvider(TTSProvider):
 
         # Write to an in-memory buffer instead of a temp file
         buf = io.BytesIO()
-        sf.write(samples, buf, sample_rate, format=output_format.upper())
+        sf.write(buf, samples, sample_rate, format=output_format.upper())
         return buf.getvalue()

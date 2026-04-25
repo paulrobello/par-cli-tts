@@ -45,7 +45,7 @@ A text-to-speech library and command-line tool supporting multiple TTS providers
 
 ### v0.5.0 (Latest)
 - **Library API surface** -- `import par_tts` is now a proper Python library with
-  `get_provider()`, `list_providers()`, typed per-provider options, and `SpeechResult`.
+  `get_provider()`, `list_providers()`, and typed per-provider options.
   See [Library Usage](#library-usage) for examples.
 - **Import package renamed** -- canonical import is now `par_tts` (was `par_cli_tts`).
   Old imports still work with a deprecation warning.
@@ -906,7 +906,7 @@ par-cli-tts/
 │   ├── model_downloader.py      # Kokoro ONNX model management
 │   ├── providers/               # TTS provider implementations
 │   │   ├── __init__.py          # PROVIDERS registry
-│   │   ├── base.py              # TTSProvider ABC, Voice, SpeechResult, Options
+│   │   ├── base.py              # TTSProvider ABC, Voice, Options
 │   │   ├── elevenlabs.py        # ElevenLabs implementation
 │   │   ├── openai.py            # OpenAI implementation
 │   │   ├── kokoro_onnx.py       # Kokoro ONNX (offline) implementation
@@ -918,7 +918,6 @@ par-cli-tts/
 │       ├── kokoro_cli.py        # Kokoro model management CLI
 │       ├── install_claude_style.py  # Claude Code style installer
 │       ├── config_file.py       # ConfigManager (YAML)
-│       ├── config.py            # TTSConfig dataclass
 │       └── console.py           # Rich console instances
 ├── par_cli_tts/                 # Compat shim (deprecated, re-exports par_tts)
 ├── tests/
