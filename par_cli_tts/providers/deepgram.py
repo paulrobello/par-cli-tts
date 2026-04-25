@@ -12,10 +12,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from par_cli_tts.audio import play_audio_bytes
 from par_cli_tts.defaults import DEFAULT_DEEPGRAM_VOICE
 from par_cli_tts.http_client import create_http_client
 from par_cli_tts.providers.base import TTSProvider, Voice
-from par_cli_tts.utils import play_audio_bytes
 
 _logger = logging.getLogger(__name__)
 

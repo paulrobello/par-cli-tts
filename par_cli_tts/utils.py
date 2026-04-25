@@ -116,7 +116,3 @@ def looks_like_voice_id(identifier: str, min_length: int = 20) -> bool:
         True if the identifier appears to be a voice ID, False otherwise.
     """
     return len(identifier) >= min_length and identifier.replace("_", "").isalnum()
-
-
-# Backward-compatible re-exports — moved to audio.py
-from par_cli_tts.audio import play_audio_bytes, play_audio_with_player  # noqa: F401, E402
