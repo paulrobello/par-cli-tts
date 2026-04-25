@@ -136,3 +136,52 @@ class TTSProvider(ABC):
     def default_voice(self) -> str:
         """Default voice for this provider."""
         pass
+
+
+@dataclass
+class SpeechResult:
+    """Structured result from speech generation."""
+
+    audio: bytes | Iterator[bytes]
+    content_type: str = "audio/mp3"
+    sample_rate: int | None = None
+    format: str | None = None
+
+
+@dataclass
+class ElevenLabsOptions:
+    """ElevenLabs-specific generation options."""
+
+    stability: float = 0.5
+    similarity_boost: float = 0.5
+
+
+@dataclass
+class OpenAIOptions:
+    """OpenAI-specific generation options."""
+
+    speed: float = 1.0
+    response_format: str = "mp3"
+    instructions: str | None = None
+
+
+@dataclass
+class KokoroOptions:
+    """Kokoro ONNX-specific generation options."""
+
+    speed: float = 1.0
+    lang: str = "en-us"
+    output_format: str = "wav"
+
+
+@dataclass
+class DeepgramOptions:
+    """Deepgram-specific generation options."""
+
+    response_format: str = "mp3"
+    sample_rate: int | None = None
+
+
+@dataclass
+class GeminiOptions:
+    """Gemini-specific generation options."""
