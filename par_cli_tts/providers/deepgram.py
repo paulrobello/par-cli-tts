@@ -7,15 +7,17 @@ identifier and ignores any separately-supplied `model` argument unless it is
 explicitly different from the default.
 """
 
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from par_cli_tts.console import console
 from par_cli_tts.defaults import DEFAULT_DEEPGRAM_VOICE
 from par_cli_tts.http_client import create_http_client
 from par_cli_tts.providers.base import TTSProvider, Voice
 from par_cli_tts.utils import play_audio_bytes
+
+_logger = logging.getLogger(__name__)
 
 DEEPGRAM_TTS_ENDPOINT = "https://api.deepgram.com/v1/speak"
 
@@ -268,7 +270,7 @@ class DeepgramProvider(TTSProvider):
         # `aura-2-thalia` -> `aura-2-thalia-en` etc. — match by ID prefix
         prefix_matches = [vid for vid in self.VOICE_IDS if vid.startswith(ident + "-")]
         if len(prefix_matches) == 1:
-            console.print(f"[green]✓ Resolved '{voice_identifier}' to voice: {prefix_matches[0]}[/green]")
+            _logger.info("Resolved '%s' to voice: %s", voice_identifier, prefix_matches[0])
             return prefix_matches[0]
 
         # Speaker-name match. Prefer Aura-2 English, then any Aura-2, then Aura-1.
@@ -282,7 +284,7 @@ class DeepgramProvider(TTSProvider):
         name_matches = [vid for (vid, name, *_) in _DEEPGRAM_VOICES if name.lower().split(" ")[0] == ident]
         if name_matches:
             best = sorted(name_matches, key=_rank)[0]
-            console.print(f"[green]✓ Resolved '{voice_identifier}' to voice: {best}[/green]")
+            _logger.info("Resolved '%s' to voice: %s", voice_identifier, best)
             return best
 
         if len(prefix_matches) > 1:

@@ -7,6 +7,7 @@ when translating voice names to IDs.
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,9 @@ import platformdirs
 import yaml
 from elevenlabs.client import ElevenLabs
 
-from par_cli_tts.console import console
 from par_cli_tts.utils import looks_like_voice_id
+
+_logger = logging.getLogger(__name__)
 
 CACHE_EXPIRY_DAYS = 7  # Cache expires after 7 days
 CACHE_CHECK_INTERVAL_HOURS = 24  # Check for changes every 24 hours
@@ -70,7 +72,7 @@ class VoiceCache:
                     "samples": data.get("samples", {}),
                 }
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not load cache: {e}[/yellow]")
+            _logger.warning("Could not load cache: %s", e)
             return {
                 "voices": {},
                 "timestamp": None,
@@ -85,7 +87,7 @@ class VoiceCache:
             with open(self.cache_file, "w", encoding="utf-8") as f:
                 yaml.safe_dump(self.cache_data, f, default_flow_style=False)
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not save cache: {e}[/yellow]")
+            _logger.warning("Could not save cache: %s", e)
 
     def is_expired(self) -> bool:
         """
@@ -189,7 +191,7 @@ class VoiceCache:
             True if cache was updated, False if no changes.
         """
         try:
-            console.print("[cyan]Checking for voice updates...[/cyan]")
+            _logger.info("Checking for voice updates...")
             voices = client.voices.get_all()
 
             new_cache = {}
@@ -209,7 +211,7 @@ class VoiceCache:
             self.cache_data["last_check"] = datetime.now().isoformat()
 
             if not force and old_hash == new_hash:
-                console.print("[dim]No voice changes detected[/dim]")
+                _logger.debug("No voice changes detected")
                 self._save_cache()  # Save updated last_check
                 return False
 
@@ -224,11 +226,11 @@ class VoiceCache:
                 "samples": existing_samples,
             }
             self._save_cache()
-            console.print(f"[green]✓ Voice cache updated with {len(new_cache)} voices[/green]")
+            _logger.info("Voice cache updated with %d voices", len(new_cache))
             return True
 
         except Exception as e:
-            console.print(f"[red]Error updating voice cache: {e}[/red]")
+            _logger.error("Error updating voice cache: %s", e)
             return False
 
     def list_cached_voices(self) -> list[tuple[str, str, list[str]]]:
@@ -265,9 +267,9 @@ class VoiceCache:
             self.cache_file.unlink()
         elif keep_samples:
             self._save_cache()
-        console.print("[green]✓ Voice cache cleared[/green]")
+        _logger.info("Voice cache cleared")
         if keep_samples and samples:
-            console.print(f"[dim]Kept {len(samples)} voice samples[/dim]")
+            _logger.debug("Kept %d voice samples", len(samples))
 
     def refresh_cache(self, client: ElevenLabs) -> bool:
         """Force refresh the cache even if not expired.
@@ -278,7 +280,7 @@ class VoiceCache:
         Returns:
             True if cache was updated, False otherwise.
         """
-        console.print("[cyan]Force refreshing voice cache...[/cyan]")
+        _logger.info("Force refreshing voice cache...")
         return self.update_cache(client, force=True)
 
     def cache_voice_sample(self, voice_id: str, sample_text: str, audio_data: bytes) -> None:
@@ -302,9 +304,9 @@ class VoiceCache:
                 "timestamp": datetime.now().isoformat(),
             }
             self._save_cache()
-            console.print(f"[dim]Cached voice sample for {voice_id}[/dim]")
+            _logger.debug("Cached voice sample for %s", voice_id)
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not cache voice sample: {e}[/yellow]")
+            _logger.warning("Could not cache voice sample: %s", e)
 
     def get_voice_sample(self, voice_id: str) -> tuple[str, bytes] | None:
         """Get cached voice sample.
@@ -353,7 +355,7 @@ def resolve_voice_identifier(
     if cache:
         cached_id = cache.get_voice_by_name(identifier)
         if cached_id and not cache.is_expired():
-            console.print(f"[dim]Using cached voice ID for '{identifier}'[/dim]")
+            _logger.debug("Using cached voice ID for '%s'", identifier)
 
             # Check for changes periodically
             if cache.should_check_for_changes():
@@ -369,7 +371,7 @@ def resolve_voice_identifier(
                 return cached_id
 
     # Fallback to API lookup
-    console.print(f"[cyan]Looking up voice '{identifier}'...[/cyan]")
+    _logger.info("Looking up voice '%s'...", identifier)
     try:
         voices = client.voices.get_all()
         identifier_lower = identifier.lower()
@@ -377,7 +379,7 @@ def resolve_voice_identifier(
         # Try exact match first
         for voice in voices.voices:
             if voice.name and voice.name.lower() == identifier_lower:
-                console.print(f"[green]✓ Found voice '{voice.name}' (ID: {voice.voice_id})[/green]")
+                _logger.info("Found voice '%s' (ID: %s)", voice.name, voice.voice_id)
 
                 # Update cache with new data
                 if cache and update_cache_if_needed:
@@ -393,7 +395,7 @@ def resolve_voice_identifier(
 
         if len(matches) == 1:
             voice_id, voice_name = matches[0]
-            console.print(f"[green]✓ Found voice '{voice_name}' (ID: {voice_id})[/green]")
+            _logger.info("Found voice '%s' (ID: %s)", voice_name, voice_id)
 
             # Update cache with new data
             if cache and update_cache_if_needed:
@@ -401,14 +403,14 @@ def resolve_voice_identifier(
 
             return voice_id
         elif len(matches) > 1:
-            console.print(f"[yellow]Multiple voices match '{identifier}':[/yellow]")
+            _logger.warning("Multiple voices match '%s':", identifier)
             for voice_id, voice_name in matches:
-                console.print(f"  - {voice_name} (ID: {voice_id})")
+                _logger.warning("  - %s (ID: %s)", voice_name, voice_id)
             raise ValueError(f"Ambiguous voice name '{identifier}'. Please be more specific or use voice ID.")
 
     except Exception as e:
         if "Ambiguous" in str(e):
             raise
-        console.print(f"[red]Error looking up voice: {e}[/red]")
+        _logger.error("Error looking up voice: %s", e)
 
     raise ValueError(f"Voice '{identifier}' not found. Use --list to see available voices.")

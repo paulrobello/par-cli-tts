@@ -1,14 +1,14 @@
 """Model downloader for Kokoro ONNX TTS models."""
 
+import logging
 import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 from platformdirs import user_data_dir
-from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 
-from par_cli_tts.console import console
+_logger = logging.getLogger(__name__)
 
 
 class ModelDownloader:
@@ -59,74 +59,46 @@ class ModelDownloader:
     def _download_file(
         self, url: str, dest_path: Path, description: str, size_mb: int, sha256: str | None = None
     ) -> None:
-        """Download a file with progress indication and optional checksum verification.
+        """Download a file with optional checksum verification.
 
         Args:
             url: URL to download from.
             dest_path: Destination file path.
-            description: Description for progress bar.
+            description: Description for logging.
             size_mb: Approximate size in MB for display.
             sha256: Optional SHA256 checksum for verification.
         """
         from par_cli_tts.utils import verify_file_checksum
 
+        temp_path = dest_path.with_suffix(".tmp")
         try:
-            # Create a temporary file first
-            temp_path = dest_path.with_suffix(".tmp")
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+            opener = urllib.request.build_opener(https_handler)
+            urllib.request.install_opener(opener)
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                DownloadColumn(),
-                TransferSpeedColumn(),
-                console=console,
-            ) as progress:
-                # Start the download task
-                task = progress.add_task(description, total=None)
+            _logger.info("Downloading %s (~%d MB)...", description, size_mb)
+            urllib.request.urlretrieve(url, temp_path)
 
-                def download_hook(block_num: int, block_size: int, total_size: int) -> None:
-                    """Hook for urllib to update progress."""
-                    if total_size > 0:
-                        # Update total if we know it
-                        if progress.tasks[task].total is None:
-                            progress.update(task, total=total_size)
-                        # Update progress
-                        downloaded = block_num * block_size
-                        progress.update(task, completed=min(downloaded, total_size))
+            if sha256:
+                _logger.info("Verifying checksum...")
+                if not verify_file_checksum(temp_path, sha256):
+                    temp_path.unlink()
+                    raise RuntimeError(f"Checksum verification failed for {description}")
+                _logger.info("Checksum verified")
 
-                # Create SSL context that doesn't verify certificates
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-
-                # Install opener with SSL verification disabled
-                https_handler = urllib.request.HTTPSHandler(context=ssl_context)
-                opener = urllib.request.build_opener(https_handler)
-                urllib.request.install_opener(opener)
-
-                # Download the file
-                urllib.request.urlretrieve(url, temp_path, reporthook=download_hook)
-
-                # Verify checksum if provided
-                if sha256:
-                    console.print("[dim]Verifying checksum...[/dim]")
-                    if not verify_file_checksum(temp_path, sha256):
-                        temp_path.unlink()
-                        raise RuntimeError(f"Checksum verification failed for {description}")
-                    console.print("[green]✓ Checksum verified[/green]")
-
-                # Move temp file to final destination
-                temp_path.rename(dest_path)
+            temp_path.rename(dest_path)
 
         except urllib.error.URLError as e:
             if temp_path.exists():
                 temp_path.unlink()
-            raise RuntimeError(f"Failed to download {description}: {e}")
+            raise RuntimeError(f"Failed to download {description}: {e}") from e
         except Exception as e:
             if temp_path.exists():
                 temp_path.unlink()
-            raise RuntimeError(f"Download error: {e}")
+            raise RuntimeError(f"Download error: {e}") from e
 
     def download_models(self, force: bool = False) -> tuple[Path, Path]:
         """Download Kokoro ONNX model files if needed.
@@ -143,39 +115,36 @@ class ModelDownloader:
         if not force and self.models_exist():
             return model_path, voice_path
 
-        # Inform user about download
-        console.print("\n[bold cyan]🤖 Kokoro ONNX Model Download Required[/bold cyan]")
-        console.print(f"Models will be downloaded to: [yellow]{self.data_dir}[/yellow]\n")
+        _logger.info("Kokoro ONNX Model Download Required")
+        _logger.info("Models will be downloaded to: %s", self.data_dir)
 
         total_size = sum(m["size_mb"] for m in self.MODELS.values())
-        console.print(
-            f"[dim]Total download size: approximately {total_size} MB (using quantized model for efficiency)[/dim]\n"
-        )
+        _logger.info("Total download size: approximately %d MB (using quantized model for efficiency)", total_size)
 
         # Download model file if needed
         if force or not model_path.exists():
             model_info = self.MODELS["kokoro-v1.0.onnx"]
-            console.print(f"📥 Downloading ONNX model ([cyan]~{model_info['size_mb']} MB[/cyan])...")
+            _logger.info("Downloading ONNX model (~%d MB)...", model_info["size_mb"])
             self._download_file(
                 model_info["url"], model_path, "kokoro-v1.0.onnx", model_info["size_mb"], model_info.get("sha256")
             )
-            console.print(f"[green]✓[/green] Model downloaded: {model_path.name}\n")
+            _logger.info("Model downloaded: %s", model_path.name)
         else:
-            console.print(f"[green]✓[/green] Model already exists: {model_path.name}")
+            _logger.info("Model already exists: %s", model_path.name)
 
         # Download voice file if needed
         if force or not voice_path.exists():
             voice_info = self.MODELS["voices-v1.0.bin"]
-            console.print(f"📥 Downloading voice embeddings ([cyan]~{voice_info['size_mb']} MB[/cyan])...")
+            _logger.info("Downloading voice embeddings (~%d MB)...", voice_info["size_mb"])
             self._download_file(
                 voice_info["url"], voice_path, "voices-v1.0.bin", voice_info["size_mb"], voice_info.get("sha256")
             )
-            console.print(f"[green]✓[/green] Voices downloaded: {voice_path.name}\n")
+            _logger.info("Voices downloaded: %s", voice_path.name)
         else:
-            console.print(f"[green]✓[/green] Voices already exist: {voice_path.name}")
+            _logger.info("Voices already exist: %s", voice_path.name)
 
-        console.print("[bold green]✨ Kokoro ONNX models ready![/bold green]\n")
-        console.print(f"[dim]Model files stored in: {self.data_dir}[/dim]\n")
+        _logger.info("Kokoro ONNX models ready!")
+        _logger.info("Model files stored in: %s", self.data_dir)
 
         return model_path, voice_path
 
@@ -185,16 +154,16 @@ class ModelDownloader:
 
         if model_path.exists():
             model_path.unlink()
-            console.print(f"[yellow]Removed:[/yellow] {model_path.name}")
+            _logger.info("Removed: %s", model_path.name)
 
         if voice_path.exists():
             voice_path.unlink()
-            console.print(f"[yellow]Removed:[/yellow] {voice_path.name}")
+            _logger.info("Removed: %s", voice_path.name)
 
         # Remove directory if empty
         try:
             self.data_dir.rmdir()
-            console.print(f"[yellow]Removed:[/yellow] {self.data_dir}")
+            _logger.info("Removed: %s", self.data_dir)
         except OSError:
             # Directory not empty, that's fine
             pass
@@ -207,7 +176,7 @@ class ModelDownloader:
         """
         model_path, voice_path = self.get_model_paths()
 
-        info = {"data_directory": str(self.data_dir), "models": {}}
+        info: dict = {"data_directory": str(self.data_dir), "models": {}}
 
         for name, path in [("model", model_path), ("voices", voice_path)]:
             if path.exists():

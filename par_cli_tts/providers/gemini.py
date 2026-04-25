@@ -8,16 +8,18 @@ single-shot ``bytes`` payload (the response is not chunked).
 """
 
 import base64
+import logging
 import struct
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from par_cli_tts.console import console
 from par_cli_tts.defaults import DEFAULT_GEMINI_VOICE
 from par_cli_tts.http_client import create_http_client
 from par_cli_tts.providers.base import TTSProvider, Voice
 from par_cli_tts.utils import play_audio_bytes
+
+_logger = logging.getLogger(__name__)
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-preview-tts"
@@ -184,13 +186,13 @@ class GeminiProvider(TTSProvider):
         if ident in self._VOICE_CANONICAL:
             canonical = self._VOICE_CANONICAL[ident]
             if canonical != voice_identifier:
-                console.print(f"[green]✓ Resolved '{voice_identifier}' to voice: {canonical}[/green]")
+                _logger.info("Resolved '%s' to voice: %s", voice_identifier, canonical)
             return canonical
 
         # Last-resort partial match (single hit only)
         partial = [name for name in self.VOICE_NAMES if ident in name.lower()]
         if len(partial) == 1:
-            console.print(f"[green]✓ Resolved '{voice_identifier}' to voice: {partial[0]}[/green]")
+            _logger.info("Resolved '%s' to voice: %s", voice_identifier, partial[0])
             return partial[0]
 
         raise ValueError(f"Voice '{voice_identifier}' not found. Available: {', '.join(sorted(self.VOICE_NAMES))}")

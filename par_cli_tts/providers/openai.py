@@ -1,16 +1,18 @@
 """OpenAI TTS provider implementation."""
 
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
 from openai import OpenAI
 
-from par_cli_tts.console import console
 from par_cli_tts.defaults import DEFAULT_OPENAI_VOICE
 from par_cli_tts.http_client import create_http_client
 from par_cli_tts.providers.base import TTSProvider, Voice
 from par_cli_tts.utils import play_audio_bytes
+
+_logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider(TTSProvider):
@@ -167,7 +169,7 @@ class OpenAIProvider(TTSProvider):
         for voice_id, description in self.VOICES.items():
             name = description.split(" - ")[0].lower()
             if voice_lower == name or voice_lower in name:
-                console.print(f"[green]✓ Resolved '{voice_identifier}' to voice: {voice_id}[/green]")
+                _logger.info("Resolved '%s' to voice: %s", voice_identifier, voice_id)
                 return voice_id
 
         # If no match found, show available voices
