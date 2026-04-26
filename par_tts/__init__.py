@@ -26,14 +26,19 @@ from par_tts.providers.base import (
     GeminiOptions,
     KokoroOptions,
     OpenAIOptions,
+    ProviderCapabilities,
+    ProviderPlugin,
     TTSProvider,
     Voice,
 )
+from par_tts.providers.registry import get_provider_plugin, get_provider_plugins, list_provider_plugins
 
 __all__ = [
     "__version__",
     "TTSProvider",
     "Voice",
+    "ProviderCapabilities",
+    "ProviderPlugin",
     "ElevenLabsOptions",
     "OpenAIOptions",
     "KokoroOptions",
@@ -42,6 +47,9 @@ __all__ = [
     "PROVIDERS",
     "get_provider",
     "list_providers",
+    "get_provider_plugin",
+    "get_provider_plugins",
+    "list_provider_plugins",
 ]
 
 

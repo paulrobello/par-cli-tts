@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from par_tts.retry import RetryPolicy
+
 
 @dataclass
 class Voice:
@@ -22,6 +24,38 @@ class Voice:
     name: str
     labels: list[str] | None = None
     category: str | None = None
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Static provider capability metadata used without instantiation."""
+
+    formats: list[str]
+    supports_speed: bool = False
+    supports_streaming: bool = False
+    supports_voice_controls: bool = False
+    supports_instructions: bool = False
+    supports_sample_rate: bool = False
+
+
+@dataclass(frozen=True)
+class ProviderPlugin:
+    """Provider plugin descriptor.
+
+    Descriptors are intentionally static so commands like ``--capabilities`` can
+    inspect providers without requiring API keys or creating network clients.
+    """
+
+    name: str
+    provider_class: type["TTSProvider"]
+    description: str
+    capabilities: ProviderCapabilities
+    default_model: str
+    default_voice: str | None = None
+    requires_api_key: bool = True
+    api_key_env_vars: tuple[str, ...] = ()
+    source: str = "builtin"
+    cost_per_million_chars: float | None = None
 
 
 class TTSProvider(ABC):
@@ -42,6 +76,10 @@ class TTSProvider(ABC):
             **kwargs: Additional provider-specific configuration.
         """
         self.api_key = api_key
+        self.retry_policy = RetryPolicy(
+            retry_attempts=int(kwargs.get("retry_attempts", 0)),
+            backoff_seconds=float(kwargs.get("retry_backoff", 0.0)),
+        )
 
     @abstractmethod
     def generate_speech(
