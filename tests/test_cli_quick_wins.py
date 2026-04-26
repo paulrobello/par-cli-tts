@@ -453,3 +453,43 @@ def test_show_unknown_voice_pack_fails_cleanly():
     assert result.exit_code != 0
     assert "Unknown voice pack" in result.output
     assert "assistant" in result.output
+
+
+def test_completion_script_prints_for_supported_shell_without_provider(monkeypatch):
+    runner = CliRunner()
+
+    def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
+        raise AssertionError("completion generation should not create a provider")
+
+    monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+
+    result = runner.invoke(tts_cli.app, ["--completion", "bash"])
+
+    assert result.exit_code == 0
+    assert "complete" in result.output.lower()
+    assert "par-tts" in result.output
+
+
+def test_completion_install_prints_shell_specific_instructions(monkeypatch):
+    runner = CliRunner()
+
+    def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
+        raise AssertionError("completion install help should not create a provider")
+
+    monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+
+    result = runner.invoke(tts_cli.app, ["--completion-install", "fish"])
+
+    assert result.exit_code == 0
+    assert "fish" in result.output.lower()
+    assert "par-tts --completion fish" in result.output
+
+
+def test_completion_rejects_unknown_shell():
+    runner = CliRunner()
+
+    result = runner.invoke(tts_cli.app, ["--completion", "powershell"])
+
+    assert result.exit_code != 0
+    assert "Unsupported shell" in result.output
+    assert "bash" in result.output

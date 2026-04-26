@@ -24,6 +24,7 @@ from rich.pretty import Pretty
 from rich.table import Table
 
 from par_tts.audio_processing import AudioProcessingOptions, concat_audio_files, postprocess_audio_file
+from par_tts.cli.completions import completion_install_instructions, generate_completion_script
 from par_tts.cli.config_file import ConfigManager
 from par_tts.cli.console import console
 from par_tts.defaults import DEFAULT_PROVIDER, get_default_voice
@@ -795,6 +796,16 @@ def handle_show_voice_pack(name: str) -> None:
     console.print(f"[bold green]Voice pack: {voice_pack.name}[/bold green]")
     console.print(voice_pack.description)
     console.print(_build_voice_pack_table(voice_pack))
+
+
+def handle_completion(shell: str) -> None:
+    """Print a shell completion script without provider initialization."""
+    console.print(generate_completion_script(shell), end="")
+
+
+def handle_completion_install(shell: str) -> None:
+    """Print shell-specific completion installation instructions."""
+    console.print(completion_install_instructions(shell))
 
 
 def _build_voice_pack_table(voice_pack: VoicePack) -> Table:
@@ -1801,6 +1812,22 @@ def main(
             help="Show bundled voice-pack recommendations and exit",
         ),
     ] = None,
+    completion: Annotated[
+        str | None,
+        typer.Option(
+            "--completion",
+            metavar="SHELL",
+            help="Print shell completion script for bash, zsh, or fish and exit",
+        ),
+    ] = None,
+    completion_install: Annotated[
+        str | None,
+        typer.Option(
+            "--completion-install",
+            metavar="SHELL",
+            help="Print shell completion installation instructions and exit",
+        ),
+    ] = None,
     dump_config: Annotated[
         bool,
         typer.Option(
@@ -2105,6 +2132,8 @@ def main(
         or capabilities
         or list_voice_packs
         or show_voice_pack
+        or completion
+        or completion_install
         or list_voices
         or preview_voice
         or dump_config
@@ -2156,6 +2185,22 @@ def main(
     if show_voice_pack:
         try:
             handle_show_voice_pack(show_voice_pack)
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
+    if completion:
+        try:
+            handle_completion(completion)
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
+    if completion_install:
+        try:
+            handle_completion_install(completion_install)
         except TTSError as exc:
             console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
             raise typer.Exit(exc.error_type.exit_code) from exc
