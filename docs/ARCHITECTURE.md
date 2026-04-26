@@ -162,6 +162,8 @@ The main entry point that handles:
 - Provider selection and initialization
 - Voice resolution and validation
 - Voice preview functionality
+- Metadata-only shell completion helpers (`--completion`, `--completion-install`)
+- Metadata-only bundled voice-pack listing/display (`--list-voice-packs`, `--show-voice-pack`)
 - Audio generation orchestration with streaming
 - Volume control for playback
 - File management and cleanup
@@ -313,14 +315,29 @@ Shared console instances for consistent output:
 - `console`: Standard output Console instance (stdout)
 - `error_console`: Error output Console instance (stderr)
 
-#### 12. HTTP Client Factory (`par_tts/http_client.py`)
+#### 12. Voice-Pack Metadata (`par_tts/voice_packs.py`, `par_tts/data/voice_packs.yaml`)
+
+Bundled voice-pack metadata for provider/voice recommendations:
+- Packaged YAML resource loaded with `importlib.resources` through `par_tts.voice_packs`
+- Strict validation into typed `VoicePack` and `VoicePackRecommendation` dataclasses
+- Metadata-only CLI operations (`--list-voice-packs`, `--show-voice-pack`) that run before provider creation and require no API keys
+- Use-case packs for alerts, assistant, narration, and storytelling
+
+#### 13. Shell Completion Helpers (`par_tts/cli/completions.py`)
+
+Completion support kept separate from synthesis logic:
+- Supports bash, zsh, and fish validation/normalization
+- Generates Typer/Click completion scripts for `par-tts`
+- Renders shell-specific install instructions (`--completion-install`) without provider creation
+
+#### 14. HTTP Client Factory (`par_tts/http_client.py`)
 
 HTTP client creation with consistent configuration:
 - `create_http_client()`: Factory function for httpx.Client
 - Configurable timeout (default: 10 seconds)
 - SSL verification options
 
-#### 13. Kokoro Model CLI (`par_tts/cli/kokoro_cli.py`)
+#### 15. Kokoro Model CLI (`par_tts/cli/kokoro_cli.py`)
 
 Dedicated CLI for Kokoro ONNX model management:
 - `download`: Download model files with --force option
@@ -534,7 +551,12 @@ flowchart TD
     ReadStdin --> Parse
     ReadFile --> Parse
     Parse --> LoadEnv[Load Environment Variables]
-    LoadEnv --> SelectProvider{Select Provider}
+    LoadEnv --> Operation{Metadata-only operation?}
+    Operation -->|--completion / --completion-install| Completions[Render shell completion script or install instructions]
+    Operation -->|--list-voice-packs / --show-voice-pack| VoicePacks[Load packaged YAML via par_tts.voice_packs and render recommendations]
+    Operation -->|Synthesis| SelectProvider{Select Provider}
+    Completions --> End
+    VoicePacks --> End
 
     SelectProvider -->|ElevenLabs| CreateEL[Create ElevenLabs Provider]
     SelectProvider -->|OpenAI| CreateOA[Create OpenAI Provider]

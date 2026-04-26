@@ -168,6 +168,19 @@ par-tts "Hello, world!"
 par-tts --help
 ```
 
+#### Shell completions
+
+Generate shell completion scripts directly from the installed CLI:
+
+```bash
+par-tts --completion bash > ~/.local/share/bash-completion/completions/par-tts
+par-tts --completion zsh > ~/.zfunc/_par-tts
+par-tts --completion fish > ~/.config/fish/completions/par-tts.fish
+
+# Or print shell-specific installation guidance
+par-tts --completion-install bash
+```
+
 ### Installation From Source
 
 For development or to get the latest features:
@@ -528,6 +541,10 @@ par-tts --preview-voice Rachel --provider elevenlabs
 
 # Save to file with custom volume
 par-tts "Save this" --output audio.mp3 --volume 1.5
+
+# Inspect built-in voice-pack recommendations
+par-tts --list-voice-packs
+par-tts --show-voice-pack assistant
 ```
 
 If running from source:
@@ -628,6 +645,21 @@ fortune | par-tts --voice nova
 curl -s https://api.example.com/text | par-tts
 ```
 
+#### Built-in voice packs
+
+Voice packs are bundled metadata-only recommendations for common use cases such
+as alerts, assistants, narration, and storytelling. They do not contact provider
+APIs or create audio until you choose one of the recommended provider/voice
+combinations for a normal synthesis command.
+
+```bash
+# List all bundled packs
+par-tts --list-voice-packs
+
+# Show provider, voice, model, and notes for one pack
+par-tts --show-voice-pack assistant
+```
+
 #### Provider Management
 
 ```bash
@@ -724,6 +756,10 @@ make clear-cache     # Clear voice cache including samples
 |--------|-------|-------------|---------|
 | `--debug` | `-d` | Show debug information (API keys sanitized) | False |
 | `--dump` | `-D` | Dump configuration and exit | False |
+| `--completion` | | Print shell completion script for `bash`, `zsh`, or `fish` and exit | None |
+| `--completion-install` | | Print shell-specific completion installation instructions and exit | None |
+| `--list-voice-packs` | | List bundled voice-pack recommendations and exit | False |
+| `--show-voice-pack` | | Show one bundled voice pack by name and exit | None |
 | `--list` | `-l` | List available voices for provider | False |
 | `--preview-voice` | `-V` | Preview a voice with sample text | None |
 | `--list-providers` | `-L` | List available TTS providers | False |

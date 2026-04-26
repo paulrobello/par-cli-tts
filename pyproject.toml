@@ -109,12 +109,14 @@ packages = [
 include = [
     "py.typed",
     "**/*.py",
+    "par_tts/data/**/*.yaml",
     ".claude/**/*",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "par_tts",
+    "par_tts/data/**/*.yaml",
     "par_cli_tts",
     ".claude",
     "LICENSE",
