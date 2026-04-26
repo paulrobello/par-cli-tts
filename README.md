@@ -73,7 +73,10 @@ For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 - **Memory Efficient** - Stream audio directly to files without memory buffering
 - **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
 - **Consistent Error Handling** - Clear error messages with categorized exit codes
-- **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI
+- **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI, exposed through validated typed option schemas
+- **Async Library API** - Async generation/listing wrappers for integrating providers into async apps without blocking the event loop
+- **Event Hooks** - Stable `on_chunk`, `on_progress`, `on_complete`, and `on_error` callbacks for library consumers
+- **Reusable Speech Pipelines** - Pre-configured `SpeechPipeline` objects for repeated synthesis in long-running applications
 - **Provider Plugins** - Built-in and third-party providers share a plugin registry with capability metadata and entry-point discovery
 - **Debug and Structured Logging** - Human-readable debug output or JSON logs for automation/telemetry ingestion
 - **Retry Controls** - Per-run or config-file retry/backoff settings for provider generation calls
@@ -527,15 +530,18 @@ TTS_VOICE_ID=Juniper
 PAR TTS can be used as a Python library in your own projects:
 
 ```python
-from par_tts import get_provider, list_providers, Voice
+from par_tts import create_provider, get_provider, list_providers, Voice
 
 # List available providers
 print(list_providers())
 # ['deepgram', 'elevenlabs', 'gemini', 'kokoro-onnx', 'openai']
 
-# Get a provider class and instantiate it
+# Get a provider class and instantiate it manually
 KokoroTTS = get_provider("kokoro-onnx")
 provider = KokoroTTS()  # no API key needed for offline providers
+
+# Or use the public factory (reads provider API keys from environment)
+provider = create_provider("kokoro-onnx")
 
 # Generate speech
 audio = provider.generate_speech("Hello world", voice="af_sarah")
@@ -566,6 +572,92 @@ audio = provider.generate_speech(
     speed=1.2,
 )
 provider.save_audio(audio, "greeting.mp3")
+```
+
+Async apps can use provider async wrappers. Streamed providers return async
+iterators, while single-shot providers return `bytes`:
+
+```python
+import asyncio
+from collections.abc import AsyncIterator
+from par_tts import get_provider
+
+async def main() -> None:
+    OpenAITTS = get_provider("openai")
+    provider = OpenAITTS(api_key="sk-...")
+    audio = await provider.generate_speech_async("Hello async", voice="nova")
+    if isinstance(audio, bytes):
+        provider.save_audio(audio, "async.mp3")
+    else:
+        chunks = [chunk async for chunk in audio]
+        provider.save_audio(iter(chunks), "async.mp3")
+
+asyncio.run(main())
+```
+
+Use typed options and reusable pipelines for repeated requests, including
+provider-neutral text processing and ffmpeg-backed audio post-processing:
+
+```python
+from par_tts import (
+    AudioProcessingOptions,
+    OpenAIOptions,
+    SpeechCallbacks,
+    SpeechPipeline,
+    TextProcessingOptions,
+)
+
+completed = []
+callbacks = SpeechCallbacks(on_complete=completed.append)
+pipeline = SpeechPipeline.from_provider_name(
+    "openai",
+    api_key="sk-...",
+    voice="nova",
+    options=OpenAIOptions(speed=1.1, response_format="mp3"),
+    text_processing=TextProcessingOptions(
+        pronunciations={"NASA": "N A S A"},
+        chunk=True,
+        max_chars=1200,
+    ),
+    audio_processing=AudioProcessingOptions(normalize=True, preset="podcast"),
+    callbacks=callbacks,
+)
+
+pipeline.synthesize_to_file("First message", "first.mp3")
+pipeline.synthesize_to_file("Second message", "second.mp3")
+print(completed[-1].bytes_generated)
+```
+
+Callbacks are available as `on_chunk(bytes)`, `on_progress(SpeechProgress)`,
+`on_complete(SpeechComplete)`, and `on_error(Exception)`. Provider option schemas
+are discoverable with `get_provider_option_schema("openai")`, and
+`options_to_kwargs()` converts typed options to `generate_speech()` kwargs.
+
+Other stable public helpers include:
+
+```python
+from par_tts import (
+    TTSError,
+    ErrorType,
+    search_voices,
+    get_voice_pack,
+    load_voice_packs,
+    estimate_synthesis_cost,
+    collect_diagnostics,
+    ModelDownloader,
+)
+
+try:
+    provider = create_provider("openai")
+except TTSError as exc:
+    if exc.error_type is ErrorType.MISSING_API_KEY:
+        print("Set OPENAI_API_KEY first")
+
+matches = search_voices(provider.list_voices(), "warm")
+pack = get_voice_pack("assistant")
+estimate = estimate_synthesis_cost("openai", "tts-1", "hello")
+diagnostics = collect_diagnostics()
+model_info = ModelDownloader().get_model_info()
 ```
 
 ### Quick Start
@@ -1178,17 +1270,25 @@ make clean       # Clean build artifacts
 ```
 par-cli-tts/
 ├── par_tts/                     # Library package (pip install par-cli-tts)
-│   ├── __init__.py              # Public API: get_provider, list_providers
+│   ├── __init__.py              # Public API: providers, pipelines, options, helpers
 │   ├── audio.py                 # Audio playback utilities
+│   ├── audio_processing.py      # AudioProcessingOptions and ffmpeg helpers
+│   ├── costs.py                 # Static synthesis cost estimates
 │   ├── defaults.py              # Default values for providers
+│   ├── diagnostics.py           # Offline diagnostic checks
 │   ├── errors.py                # TTSError, ErrorType, handle_error
 │   ├── http_client.py           # HTTP client factory
+│   ├── pipeline.py              # Reusable SpeechPipeline objects
+│   ├── provider_factory.py      # Public create_provider helper
+│   ├── text_processing.py       # TextProcessingOptions and segmentation helpers
 │   ├── utils.py                 # Streaming, checksums, sanitization
 │   ├── voice_cache.py           # ElevenLabs voice caching
+│   ├── voice_packs.py           # Built-in voice-pack metadata
+│   ├── voice_search.py          # Provider-neutral voice search
 │   ├── model_downloader.py      # Kokoro ONNX model management
 │   ├── providers/               # TTS provider implementations
 │   │   ├── __init__.py          # Provider exports and PROVIDERS compatibility mapping
-│   │   ├── base.py              # TTSProvider ABC, Voice, Options, plugin metadata
+│   │   ├── base.py              # TTSProvider ABC, async APIs, callbacks, Options, plugin metadata
 │   │   ├── registry.py          # Built-in and entry-point provider plugin discovery
 │   │   ├── elevenlabs.py        # ElevenLabs implementation
 │   │   ├── openai.py            # OpenAI implementation

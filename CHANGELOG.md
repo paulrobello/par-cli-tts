@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Async library API** — providers now expose `generate_speech_async()` and
+  `list_voices_async()` for async application integration.
+- **Speech callbacks** — `SpeechCallbacks` supports `on_chunk`, `on_progress`,
+  `on_complete`, and `on_error` hooks for observing generation.
+- **Typed option schema helpers** — provider option dataclasses now validate
+  values and are discoverable through `get_provider_option_schema()`; use
+  `options_to_kwargs()` to pass typed options into generation calls.
+- **Reusable pipelines** — `SpeechPipeline` stores provider, voice, model,
+  options, callbacks, text processing, and audio post-processing for repeated
+  sync or async synthesis.
+- **Expanded public API** — top-level exports now include `create_provider()`,
+  `TTSError`, `ErrorType`, text/audio processing option types, voice search,
+  voice packs, static cost estimation, diagnostics, `RetryPolicy`, and Kokoro
+  model management via `ModelDownloader`.
+
 ## [0.5.1] - 2025-04-25
 
 ### Fixed

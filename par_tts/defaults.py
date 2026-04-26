@@ -16,6 +16,14 @@ DEFAULT_KOKORO_VOICE = "af_sarah"
 DEFAULT_DEEPGRAM_VOICE = "aura-2-thalia-en"
 DEFAULT_GEMINI_VOICE = "Kore"
 
+DEFAULT_MODELS: dict[str, str] = {
+    "elevenlabs": "eleven_multilingual_v2",
+    "openai": "gpt-4o-mini-tts",
+    "kokoro-onnx": "kokoro-v1.0",
+    "deepgram": DEFAULT_DEEPGRAM_VOICE,
+    "gemini": "gemini-2.5-flash-preview-tts",
+}
+
 
 def get_default_voice(provider: str) -> str:
     """Get default voice for the specified provider.

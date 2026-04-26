@@ -186,14 +186,36 @@ The main entry point that handles:
 #### 2. Provider Abstraction (`par_tts/providers/base.py`)
 
 Abstract base class defining the provider interface:
-- Speech generation with Iterator[bytes] support
+- Speech generation with `Iterator[bytes]` support plus async wrappers via `generate_speech_async()` and `list_voices_async()`
 - Voice listing and resolution
 - Default `save_audio()` and `play_audio()` implementations in the base class (providers override only when needed, e.g. ElevenLabs SDK save)
 - Volume control for playback
+- Stable speech callback types: `SpeechCallbacks`, `SpeechProgress`, and `SpeechComplete`
 - `PROVIDER_KWARGS` class attribute for declaring provider-specific options
 - Static plugin metadata via `ProviderCapabilities` and `ProviderPlugin`
 - Optional API key for offline providers
-- Per-provider options dataclasses: `ElevenLabsOptions`, `OpenAIOptions`, `KokoroOptions`, `DeepgramOptions`, `GeminiOptions`
+- Validated per-provider options dataclasses and schema helpers: `get_provider_option_schema()` and `options_to_kwargs()`
+
+#### Library Pipeline (`par_tts/pipeline.py`)
+
+`SpeechPipeline` is the reusable library orchestration object for embedded and long-running apps:
+- Stores a provider instance plus default voice, model, typed options, callbacks, text processing options, and audio processing options
+- Resolves and caches voice names before generation
+- Applies provider-neutral `TextProcessingOptions` before synthesis
+- Applies `AudioProcessingOptions` after file synthesis when requested
+- Provides sync and async `synthesize()` / `synthesize_to_file()` helpers
+- Keeps CLI concerns out of the library API so applications can reuse provider orchestration without Typer/Rich setup
+
+#### Public Library Helpers
+
+The top-level `par_tts` API exposes stable provider-neutral helpers where library users should not need to import CLI code:
+- `create_provider()` builds providers from registry metadata and declared API-key environment variables
+- `TTSError` and `ErrorType` provide catchable library exceptions
+- `search_voices()` searches provider voice catalogs by ID, name, labels, and category
+- `load_voice_packs()` / `get_voice_pack()` expose bundled recommendation metadata
+- `estimate_synthesis_cost()` exposes static planning estimates without provider initialization
+- `collect_diagnostics()` exposes offline support checks
+- `ModelDownloader` exposes Kokoro model management for embedded offline applications
 
 #### 3. Provider Plugin Registry (`par_tts/providers/registry.py`)
 
@@ -1684,13 +1706,18 @@ gantt
 
 ### Recent Improvements
 
-#### Current provider-oriented updates
+#### Current library/provider-oriented updates
 
-1. **Provider Plugin Registry**: Built-in providers and third-party providers now share `ProviderPlugin` descriptors and a central registry
-2. **Entry Point Discovery**: External packages can expose providers through the `par_tts.providers` entry point group
-3. **Provider Capability Matrix**: `--capabilities` renders static provider capabilities without initializing providers or requiring API keys
-4. **Voice Benchmark Mode**: `--benchmark` compares objective latency, output size, and estimated cost across selected providers
-5. **Plugin-Aware Factory**: `create_provider()` uses plugin metadata for API key requirements, provider class selection, and external no-key providers
+1. **Async Library API**: Providers expose `generate_speech_async()` and `list_voices_async()` for async application integration
+2. **Speech Callbacks**: `SpeechCallbacks` provides stable `on_chunk`, `on_progress`, `on_complete`, and `on_error` hooks
+3. **Reusable SpeechPipeline**: Library users can preconfigure provider, voice, model, typed options, callbacks, text processing, and audio post-processing for repeated synthesis
+4. **Public Provider Factory**: `create_provider()` uses plugin metadata and declared API-key environment variables without importing CLI modules
+5. **Provider Option Schemas**: Typed provider option dataclasses validate values and are discoverable through `get_provider_option_schema()`
+6. **Public Helper APIs**: Voice search, voice packs, cost estimation, diagnostics, errors, retry policy, and Kokoro model management are exposed as stable library helpers
+7. **Provider Plugin Registry**: Built-in providers and third-party providers now share `ProviderPlugin` descriptors and a central registry
+8. **Entry Point Discovery**: External packages can expose providers through the `par_tts.providers` entry point group
+9. **Provider Capability Matrix**: `--capabilities` renders static provider capabilities without initializing providers or requiring API keys
+10. **Voice Benchmark Mode**: `--benchmark` compares objective latency, output size, and estimated cost across selected providers
 
 #### v0.5.0
 

@@ -109,3 +109,5 @@ docs/.doctrees/
 # Misc
 settings.local.json
 docs/superpowers
+*~
+.pi/extensions/discord-relay/state.json

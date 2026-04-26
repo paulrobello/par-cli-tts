@@ -17,6 +17,22 @@ class TextSegment:
     pause_after_ms: int = 0
 
 
+@dataclass(frozen=True)
+class TextProcessingOptions:
+    """Options for provider-neutral text preprocessing."""
+
+    pronunciations: dict[str, str] | None = None
+    markup: bool = False
+    voice_sections: bool = False
+    chunk: bool = False
+    max_chars: int = 1200
+    auto_lang: bool = False
+
+    def __post_init__(self) -> None:
+        if self.max_chars <= 0:
+            raise ValueError("max_chars must be greater than 0")
+
+
 def apply_pronunciations(text: str, pronunciations: dict[str, str] | None) -> str:
     """Apply whole-word pronunciation replacements case-insensitively."""
     if not pronunciations:
@@ -228,6 +244,7 @@ def auto_detect_lang(text: str) -> str:
 def build_text_segments(
     text: str,
     *,
+    options: TextProcessingOptions | None = None,
     pronunciations: dict[str, str] | None = None,
     markup: bool = False,
     voice_sections: bool = False,
@@ -236,21 +253,33 @@ def build_text_segments(
     auto_lang: bool = False,
 ) -> list[TextSegment]:
     """Build generation segments from raw input and pipeline options."""
-    rewritten = apply_pronunciations(text, pronunciations)
-    if voice_sections:
+    active_options = options or TextProcessingOptions(
+        pronunciations=pronunciations,
+        markup=markup,
+        voice_sections=voice_sections,
+        chunk=chunk,
+        max_chars=max_chars,
+        auto_lang=auto_lang,
+    )
+    rewritten = apply_pronunciations(text, active_options.pronunciations)
+    if active_options.voice_sections:
         segments = parse_voice_sections(rewritten)
-    elif markup:
+    elif active_options.markup:
         segments = parse_lightweight_markup(rewritten)
     else:
         segments = [TextSegment(text=rewritten.strip())]
 
     expanded: list[TextSegment] = []
     for segment in segments:
-        chunks = split_text_chunks(segment.text, max_chars=max_chars) if chunk else [segment.text.strip()]
+        chunks = (
+            split_text_chunks(segment.text, max_chars=active_options.max_chars)
+            if active_options.chunk
+            else [segment.text.strip()]
+        )
         for chunk_text in chunks:
             if not chunk_text:
                 continue
-            lang = segment.lang or (auto_detect_lang(chunk_text) if auto_lang else None)
+            lang = segment.lang or (auto_detect_lang(chunk_text) if active_options.auto_lang else None)
             expanded.append(
                 TextSegment(
                     text=chunk_text,
