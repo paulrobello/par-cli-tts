@@ -2001,6 +2001,22 @@ def main(
     specified TTS provider. Voices can be configured via command line options
     or environment variables.
     """
+    if completion:
+        try:
+            handle_completion(completion)
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
+    if completion_install:
+        try:
+            handle_completion_install(completion_install)
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
     load_dotenv()
 
     # Handle config operations

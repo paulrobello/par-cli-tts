@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
+import typer.completion
 
 from par_tts.errors import ErrorType, TTSError
 
@@ -28,52 +26,15 @@ def _completion_env_var(program_name: str) -> str:
     return f"_{normalized_program}_COMPLETE"
 
 
-def _fallback_completion_script(shell: str, program_name: str) -> str:
-    env_var = _completion_env_var(program_name)
-    if shell == "bash":
-        return (
-            f"# bash completion for {program_name}\n"
-            f"# Regenerate with: {program_name} --completion bash\n"
-            f"eval \"$({env_var}=bash_source {program_name})\"\n"
-        )
-    if shell == "zsh":
-        return (
-            f"# zsh completion for {program_name}\n"
-            f"# Regenerate with: {program_name} --completion zsh\n"
-            f"eval \"$({env_var}=zsh_source {program_name})\"\n"
-        )
-    return (
-        f"# fish completion for {program_name}\n"
-        f"# Regenerate with: {program_name} --completion fish\n"
-        f"{env_var}=fish_source {program_name} | source\n"
-    )
-
-
 def generate_completion_script(shell: str, program_name: str = "par-tts") -> str:
-    """Return a shell completion script for bash, zsh, or fish.
-
-    Typer/Click expose completion scripts through a standard environment
-    variable. We try that mechanism first, then fall back to a deterministic
-    delegating snippet so this command remains useful in constrained contexts.
-    """
+    """Return a shell completion script for bash, zsh, or fish."""
     normalized_shell = normalize_shell(shell)
-    env = os.environ.copy()
-    env[_completion_env_var(program_name)] = f"{normalized_shell}_source"
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "par_tts.cli.tts_cli"],
-            check=False,
-            capture_output=True,
-            env=env,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError, TimeoutError):
-        return _fallback_completion_script(normalized_shell, program_name)
-
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout
-    return _fallback_completion_script(normalized_shell, program_name)
+    completion_script = getattr(typer.completion, "get_completion_script")
+    return completion_script(
+        prog_name=program_name,
+        complete_var=_completion_env_var(program_name),
+        shell=normalized_shell,
+    )
 
 
 def completion_install_instructions(shell: str) -> str:

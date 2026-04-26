@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from par_tts.audio_processing import AudioProcessingOptions
 from par_tts.cli import tts_cli
+from par_tts.cli.completions import generate_completion_script
 from par_tts.errors import TTSError
 from par_tts.providers.base import Voice
 from par_tts.text_processing import TextSegment
@@ -455,34 +456,68 @@ def test_show_unknown_voice_pack_fails_cleanly():
     assert "assistant" in result.output
 
 
-def test_completion_script_prints_for_supported_shell_without_provider(monkeypatch):
+def test_generate_completion_script_uses_typer_api_without_fallback_delegate():
+    script = generate_completion_script("bash")
+
+    assert "_PAR_TTS_COMPLETE" in script
+    assert "complete_bash" in script
+    assert "Shell source not supported" not in script
+    assert 'eval "$(_PAR_TTS_COMPLETE=bash_source par-tts)"' not in script
+
+
+def test_completion_script_prints_for_supported_shell_without_provider_or_config(monkeypatch):
     runner = CliRunner()
 
     def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
         raise AssertionError("completion generation should not create a provider")
 
+    def noisy_load_config(self: Any) -> None:
+        print("Loaded config from test marker")
+        raise AssertionError("completion generation should not load config")
+
     monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+    monkeypatch.setattr(
+        tts_cli,
+        "load_dotenv",
+        lambda: (_ for _ in ()).throw(AssertionError("completion generation should not load dotenv")),
+    )
+    monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
     result = runner.invoke(tts_cli.app, ["--completion", "bash"])
 
     assert result.exit_code == 0
-    assert "complete" in result.output.lower()
+    assert "_PAR_TTS_COMPLETE" in result.output
+    assert "complete_bash" in result.output
     assert "par-tts" in result.output
+    assert "Loaded config from" not in result.output
+    assert "Shell source not supported" not in result.output
 
 
-def test_completion_install_prints_shell_specific_instructions(monkeypatch):
+def test_completion_install_prints_shell_specific_instructions_without_config(monkeypatch):
     runner = CliRunner()
 
     def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
         raise AssertionError("completion install help should not create a provider")
 
+    def noisy_load_config(self: Any) -> None:
+        print("Loaded config from test marker")
+        raise AssertionError("completion install help should not load config")
+
     monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+    monkeypatch.setattr(
+        tts_cli,
+        "load_dotenv",
+        lambda: (_ for _ in ()).throw(AssertionError("completion install help should not load dotenv")),
+    )
+    monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
     result = runner.invoke(tts_cli.app, ["--completion-install", "fish"])
 
     assert result.exit_code == 0
     assert "fish" in result.output.lower()
     assert "par-tts --completion fish" in result.output
+    assert "Loaded config from" not in result.output
+    assert "Shell source not supported" not in result.output
 
 
 def test_completion_rejects_unknown_shell():
