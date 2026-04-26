@@ -1,0 +1,44 @@
+alerts:
+  description: Short, clear voices for notifications, reminders, and status updates.
+  recommendations:
+    - provider: openai
+      voice: alloy
+      model: gpt-4o-mini-tts
+      notes: Crisp general-purpose alert voice.
+    - provider: deepgram
+      voice: aura-2-thalia-en
+      model: aura-2-thalia-en
+      notes: Low-latency cloud voice suitable for notifications.
+assistant:
+  description: Friendly assistant voices for conversational CLI responses.
+  recommendations:
+    - provider: openai
+      voice: nova
+      model: gpt-4o-mini-tts
+      notes: Warm, approachable assistant tone.
+    - provider: kokoro-onnx
+      voice: af_sarah
+      model: kokoro-v1.0
+      notes: Offline assistant option with a clear voice.
+narration:
+  description: Balanced voices for longer narration, documentation, and tutorials.
+  recommendations:
+    - provider: elevenlabs
+      voice: Juniper
+      model: eleven_multilingual_v2
+      notes: Natural narration with broad language support.
+    - provider: openai
+      voice: shimmer
+      model: gpt-4o-mini-tts
+      notes: Smooth, bright narration style.
+storytelling:
+  description: Expressive voices for fiction, dramatic readings, and characterful prose.
+  recommendations:
+    - provider: elevenlabs
+      voice: Rachel
+      model: eleven_multilingual_v2
+      notes: Expressive storytelling-style delivery.
+    - provider: gemini
+      voice: Kore
+      model: gemini-2.5-flash-preview-tts
+      notes: Flexible Gemini voice for creative readings.
