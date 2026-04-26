@@ -17,7 +17,7 @@ This document provides a comprehensive overview of the PAR CLI TTS system archit
 
 ## System Overview
 
-PAR CLI TTS is a command-line text-to-speech tool that provides a unified interface for multiple TTS providers including cloud-based (ElevenLabs, OpenAI, Deepgram, Google Gemini) and offline (Kokoro ONNX) solutions. The architecture follows a provider abstraction pattern, enabling seamless integration of different TTS services while maintaining a consistent user experience.
+PAR CLI TTS is a command-line text-to-speech tool that provides a unified interface for multiple TTS providers including cloud-based (ElevenLabs, OpenAI, Deepgram, Google Gemini) and offline (Kokoro ONNX) solutions. The architecture follows a provider abstraction pattern backed by a plugin registry, enabling built-in and third-party TTS services to share the same discovery, metadata, and initialization path while maintaining a consistent user experience.
 
 ### High-Level Architecture
 
@@ -32,6 +32,7 @@ graph TB
 
     subgraph "Core Application Layer"
         PM[Provider Manager]
+        PR[Provider Registry<br/>providers/registry.py]
         VC[Voice Cache<br/>voice_cache.py]
         MD[Model Downloader<br/>model_downloader.py]
         CFG[Configuration Manager<br/>cli/config_file.py]
@@ -50,7 +51,7 @@ graph TB
         KO[KokoroONNXProvider]
         DG[DeepgramProvider]
         GM[GeminiProvider]
-        FP[Future Providers<br/>...]
+        FP[External Provider Plugins<br/>entry points]
     end
 
     subgraph "External Services"
@@ -69,6 +70,7 @@ graph TB
     end
 
     CLI --> PM
+    CLI --> PR
     CLI --> CFG
     CLI --> ERR
     CLI --> CONS
@@ -76,7 +78,8 @@ graph TB
     KCLI --> CONS
     ENV --> CFG
     CONF --> CFG
-    PM --> BASE
+    PM --> PR
+    PR --> BASE
     PM --> UTIL
     PM --> DFLT
     BASE --> AUDIO
@@ -111,6 +114,7 @@ graph TB
     style KCLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style ENV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style PM fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style PR fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style MD fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style CONF fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -142,7 +146,7 @@ graph TB
 ### Key Design Principles
 
 1. **Provider Agnostic**: Core logic is independent of specific TTS providers
-2. **Extensible**: New providers can be added without modifying existing code
+2. **Extensible**: New providers can be added through the `par_tts.providers` entry point group without forking the project
 3. **Cached Operations**: Voice data is cached to minimize API calls
 4. **Environment-First Configuration**: Uses environment variables for sensitive data
 5. **Type-Safe**: Comprehensive type hints throughout the codebase
@@ -159,11 +163,13 @@ graph TB
 The main entry point that handles:
 - Command-line argument parsing using Typer with short flags
 - Multiple input methods (direct text, stdin, @filename)
-- Provider selection and initialization
+- Provider selection and initialization through plugin metadata
 - Voice resolution and validation
 - Voice preview functionality
+- Provider capability matrix output (`--capabilities`)
 - Metadata-only shell completion helpers (`--completion`, `--completion-install`)
 - Metadata-only bundled voice-pack listing/display (`--list-voice-packs`, `--show-voice-pack`)
+- Objective benchmark orchestration (`--benchmark`)
 - Audio generation orchestration with streaming
 - Volume control for playback
 - File management and cleanup
@@ -185,11 +191,21 @@ Abstract base class defining the provider interface:
 - Default `save_audio()` and `play_audio()` implementations in the base class (providers override only when needed, e.g. ElevenLabs SDK save)
 - Volume control for playback
 - `PROVIDER_KWARGS` class attribute for declaring provider-specific options
-- Provider metadata
+- Static plugin metadata via `ProviderCapabilities` and `ProviderPlugin`
 - Optional API key for offline providers
 - Per-provider options dataclasses: `ElevenLabsOptions`, `OpenAIOptions`, `KokoroOptions`, `DeepgramOptions`, `GeminiOptions`
 
-#### 3. Provider Implementations
+#### 3. Provider Plugin Registry (`par_tts/providers/registry.py`)
+
+Central discovery and metadata boundary for providers:
+- Defines built-in provider descriptors for ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Gemini
+- Loads third-party providers from the `par_tts.providers` Python entry point group
+- Accepts entry points that expose a `ProviderPlugin`, a zero-argument factory returning `ProviderPlugin`, or a `TTSProvider` subclass with plugin metadata attributes
+- Isolates bad external plugins and exposes diagnostics without blocking built-in providers
+- Derives `PROVIDERS` compatibility mappings from plugin descriptors
+- Supplies static capability data for `--capabilities` without instantiating providers or requiring API keys
+
+#### 4. Provider Implementations
 
 **ElevenLabs Provider (`par_tts/providers/elevenlabs.py`)**
 - Voice caching support with change detection
@@ -236,7 +252,7 @@ Abstract base class defining the provider interface:
 - Default voice: Kore
 - Supported formats: wav
 
-#### 4. Voice Cache System (`par_tts/voice_cache.py`)
+#### 5. Voice Cache System (`par_tts/voice_cache.py`)
 
 Intelligent caching layer for voice data:
 - XDG-compliant storage
@@ -248,7 +264,7 @@ Intelligent caching layer for voice data:
 - Manual cache refresh (--refresh-cache)
 - Sample cache management (--clear-cache-samples)
 
-#### 5. Model Downloader (`par_tts/model_downloader.py`)
+#### 6. Model Downloader (`par_tts/model_downloader.py`)
 
 Automatic model management for offline providers:
 - XDG-compliant data storage
@@ -258,7 +274,7 @@ Automatic model management for offline providers:
 - Model verification and cleanup
 - ~106 MB total download size for Kokoro ONNX
 
-#### 6. Utility Functions (`par_tts/utils.py`)
+#### 7. Utility Functions (`par_tts/utils.py`)
 
 Common utilities for the application:
 - `stream_to_file()`: Memory-efficient streaming
@@ -267,7 +283,7 @@ Common utilities for the application:
 - `calculate_file_checksum()`: Checksum generation
 - `looks_like_voice_id()`: Detect if string is a voice ID vs name
 
-#### 7. Audio Playback (`par_tts/audio.py`)
+#### 8. Audio Playback (`par_tts/audio.py`)
 
 Dedicated module for cross-platform audio playback (extracted from utils for library use):
 - `play_audio_with_player()`: Cross-platform audio playback with volume
@@ -276,7 +292,7 @@ Dedicated module for cross-platform audio playback (extracted from utils for lib
 - `_play_audio_windows()`: Windows-specific audio playback
 - `play_audio_bytes()`: Play audio from bytes using system player
 
-#### 8. Configuration File Manager (`par_tts/cli/config_file.py`)
+#### 9. Configuration File Manager (`par_tts/cli/config_file.py`)
 
 YAML-based configuration file support:
 - `ConfigFile`: Pydantic model for config structure with validation
@@ -288,7 +304,7 @@ YAML-based configuration file support:
 - Configuration schema validation with Pydantic (rejects unknown providers in `voices:`)
 - Config file permissions enforced to 0600 (owner-only read/write)
 
-#### 9. Error Handling Module (`par_tts/errors.py`)
+#### 10. Error Handling Module (`par_tts/errors.py`)
 
 Centralized error management:
 - `ErrorType`: Enum for categorized exit codes (User: 1, System: 2, File: 3, Config: 4)
@@ -298,7 +314,7 @@ Centralized error management:
 - `validate_api_key()`: API key validation for cloud providers
 - `validate_file_path()`: File path validation with security checks
 
-#### 10. Default Values (`par_tts/defaults.py`)
+#### 11. Default Values (`par_tts/defaults.py`)
 
 Centralized default configuration values:
 - `DEFAULT_PROVIDER`: kokoro-onnx
@@ -309,13 +325,13 @@ Centralized default configuration values:
 - `DEFAULT_GEMINI_VOICE`: Kore
 - `get_default_voice()`: Get default voice for a provider (checks env vars first)
 
-#### 11. Console Output (`par_tts/cli/console.py`)
+#### 12. Console Output (`par_tts/cli/console.py`)
 
 Shared console instances for consistent output:
 - `console`: Standard output Console instance (stdout)
 - `error_console`: Error output Console instance (stderr)
 
-#### 12. Voice-Pack Metadata (`par_tts/voice_packs.py`, `par_tts/data/voice_packs.yaml`)
+#### 13. Voice-Pack Metadata (`par_tts/voice_packs.py`, `par_tts/data/voice_packs.yaml`)
 
 Bundled voice-pack metadata for provider/voice recommendations:
 - Packaged YAML resource loaded with `importlib.resources` through `par_tts.voice_packs`
@@ -323,21 +339,21 @@ Bundled voice-pack metadata for provider/voice recommendations:
 - Metadata-only CLI operations (`--list-voice-packs`, `--show-voice-pack`) that run before provider creation and require no API keys
 - Use-case packs for alerts, assistant, narration, and storytelling
 
-#### 13. Shell Completion Helpers (`par_tts/cli/completions.py`)
+#### 14. Shell Completion Helpers (`par_tts/cli/completions.py`)
 
 Completion support kept separate from synthesis logic:
 - Supports bash, zsh, and fish validation/normalization
 - Generates Typer/Click completion scripts for `par-tts`
 - Renders shell-specific install instructions (`--completion-install`) without provider creation
 
-#### 14. HTTP Client Factory (`par_tts/http_client.py`)
+#### 15. HTTP Client Factory (`par_tts/http_client.py`)
 
 HTTP client creation with consistent configuration:
 - `create_http_client()`: Factory function for httpx.Client
 - Configurable timeout (default: 10 seconds)
 - SSL verification options
 
-#### 15. Kokoro Model CLI (`par_tts/cli/kokoro_cli.py`)
+#### 16. Kokoro Model CLI (`par_tts/cli/kokoro_cli.py`)
 
 Dedicated CLI for Kokoro ONNX model management:
 - `download`: Download model files with --force option
@@ -430,6 +446,31 @@ classDiagram
         +category: str
     }
 
+    class ProviderCapabilities {
+        +formats: list~str~
+        +supports_speed: bool
+        +supports_streaming: bool
+        +supports_voice_controls: bool
+    }
+
+    class ProviderPlugin {
+        +name: str
+        +provider_class: type~TTSProvider~
+        +description: str
+        +capabilities: ProviderCapabilities
+        +default_model: str
+        +default_voice: str | None
+        +requires_api_key: bool
+        +api_key_env_vars: tuple~str~
+    }
+
+    class ProviderRegistry {
+        +get_provider_plugins() dict~str, ProviderPlugin~
+        +get_provider_plugin(name) ProviderPlugin
+        +get_provider_classes() dict
+        +get_plugin_diagnostics() list~str~
+    }
+
     class ElevenLabsProvider {
         +client: ElevenLabs
         +cache: VoiceCache
@@ -505,6 +546,9 @@ classDiagram
     TTSProvider <|-- DeepgramProvider
     TTSProvider <|-- GeminiProvider
     TTSProvider ..> Voice : uses
+    ProviderPlugin --> ProviderCapabilities : has
+    ProviderPlugin --> TTSProvider : references
+    ProviderRegistry --> ProviderPlugin : discovers
     ElevenLabsProvider --> VoiceCache : uses
     KokoroONNXProvider --> ModelDownloader : uses
     ElevenLabsProvider --> Voice : creates
@@ -515,6 +559,9 @@ classDiagram
 
     style TTSProvider fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Voice fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style ProviderCapabilities fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style ProviderPlugin fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style ProviderRegistry fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style ElevenLabsProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style OpenAIProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style KokoroONNXProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
@@ -524,17 +571,67 @@ classDiagram
 
 ### Provider Registration
 
-Providers are registered in a central registry (`par_tts/providers/__init__.py`):
+Providers are described by plugin descriptors in `par_tts/providers/registry.py`.
+The public `PROVIDERS` mapping in `par_tts/providers/__init__.py` is retained for
+backward compatibility, but it is now derived from plugin descriptors rather
+than maintained as a hand-written source of truth.
 
 ```python
-PROVIDERS = {
-    "elevenlabs": ElevenLabsProvider,
-    "openai": OpenAIProvider,
-    "kokoro-onnx": KokoroONNXProvider,
-    "deepgram": DeepgramProvider,
-    "gemini": GeminiProvider,
-    # Future providers added here
-}
+from par_tts.providers.base import ProviderCapabilities, ProviderPlugin
+
+ProviderPlugin(
+    name="openai",
+    provider_class=OpenAIProvider,
+    description="OpenAI",
+    capabilities=ProviderCapabilities(
+        formats=["mp3", "opus", "aac", "flac", "wav"],
+        supports_speed=True,
+        supports_instructions=True,
+    ),
+    default_model="gpt-4o-mini-tts",
+    default_voice="nova",
+    api_key_env_vars=("OPENAI_API_KEY",),
+)
+```
+
+Third-party packages extend the registry with Python entry points:
+
+```toml
+[project.entry-points."par_tts.providers"]
+my-provider = "my_package.tts:provider_plugin"
+```
+
+The entry point can load a `ProviderPlugin`, a zero-argument factory returning a
+`ProviderPlugin`, or a `TTSProvider` subclass with plugin metadata attributes.
+Discovery is error-isolated: one broken third-party plugin records diagnostics
+but does not prevent built-in providers from loading.
+
+### Provider Metadata Flow
+
+```mermaid
+flowchart TD
+    Builtins[Built-in ProviderPlugin descriptors]
+    EntryPoints[Entry point group<br/>par_tts.providers]
+    Registry[Provider registry<br/>registry.py]
+    Providers[PROVIDERS compatibility mapping]
+    Capabilities[--capabilities table]
+    Factory[create_provider factory]
+    Benchmark[--benchmark]
+
+    Builtins --> Registry
+    EntryPoints --> Registry
+    Registry --> Providers
+    Registry --> Capabilities
+    Registry --> Factory
+    Registry --> Benchmark
+
+    style Builtins fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style EntryPoints fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style Registry fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style Providers fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Capabilities fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style Factory fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Benchmark fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
 ```
 
 ## Data Flow
@@ -552,36 +649,32 @@ flowchart TD
     ReadFile --> Parse
     Parse --> LoadEnv[Load Environment Variables]
     LoadEnv --> Operation{Metadata-only operation?}
+
+    Operation -->|--capabilities| Capabilities[Render plugin capability matrix]
     Operation -->|--completion / --completion-install| Completions[Render shell completion script or install instructions]
     Operation -->|--list-voice-packs / --show-voice-pack| VoicePacks[Load packaged YAML via par_tts.voice_packs and render recommendations]
-    Operation -->|Synthesis| SelectProvider{Select Provider}
+    Operation -->|--dry-run / --estimate-cost| StaticOutput[Render static plan or cost estimate]
+    Operation -->|Synthesis / Benchmark| SelectProvider[Resolve ProviderPlugin]
+    Capabilities --> End
     Completions --> End
     VoicePacks --> End
+    StaticOutput --> End
 
-    SelectProvider -->|ElevenLabs| CreateEL[Create ElevenLabs Provider]
-    SelectProvider -->|OpenAI| CreateOA[Create OpenAI Provider]
-    SelectProvider -->|Kokoro ONNX| CreateKO[Create Kokoro ONNX Provider]
-    SelectProvider -->|Deepgram| CreateDG[Create Deepgram Provider]
-    SelectProvider -->|Gemini| CreateGM[Create Gemini Provider]
+    SelectProvider --> CreateProvider[Create provider from plugin metadata]
+    CreateProvider --> ResolveVoice[Resolve Voice]
 
-    CreateEL --> ResolveVoiceEL[Resolve Voice with Cache]
-    CreateOA --> ResolveVoiceOA[Resolve Voice Direct]
-    CreateKO --> ResolveVoiceKO[Resolve Voice Local]
-    CreateDG --> ResolveVoiceDG[Resolve Voice Name/ID]
-    CreateGM --> ResolveVoiceGM[Resolve Voice Name]
-
-    ResolveVoiceEL --> CheckCache{Cache Valid?}
+    ResolveVoice --> CachePath{Provider uses voice cache?}
+    CachePath -->|ElevenLabs| CheckCache{Cache Valid?}
     CheckCache -->|No| FetchVoices[Fetch from API]
     FetchVoices --> UpdateCache[Update Cache]
     UpdateCache --> UseVoice
     CheckCache -->|Yes| UseVoice[Use Voice ID]
+    CachePath -->|Other providers| UseVoice
 
-    ResolveVoiceOA --> UseVoice
-    ResolveVoiceKO --> UseVoice
-    ResolveVoiceDG --> UseVoice
-    ResolveVoiceGM --> UseVoice
-
-    UseVoice --> GenerateTTS[Generate TTS]
+    UseVoice --> BenchmarkDecision{Benchmark mode?}
+    BenchmarkDecision -->|Yes| BenchmarkRun[Run repeated generation and collect latency/size/cost]
+    BenchmarkRun --> End
+    BenchmarkDecision -->|No| GenerateTTS[Generate TTS]
     GenerateTTS --> ReceiveAudio[Receive Audio Data]
 
     ReceiveAudio --> SaveDecision{Save to File?}
@@ -606,17 +699,15 @@ flowchart TD
     style Start fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Parse fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style LoadEnv fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Operation fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style Capabilities fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style StaticOutput fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style SelectProvider fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style CreateEL fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style CreateOA fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style CreateKO fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style CreateDG fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style CreateGM fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style ResolveVoiceEL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ResolveVoiceOA fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ResolveVoiceKO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ResolveVoiceDG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ResolveVoiceGM fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CreateProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style ResolveVoice fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CachePath fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style BenchmarkDecision fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style BenchmarkRun fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style CheckCache fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style FetchVoices fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style UpdateCache fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -1112,24 +1203,34 @@ sequenceDiagram
 
 ### Adding a New Provider
 
-The architecture is designed for easy extension with new TTS providers:
+The architecture supports two extension paths:
+
+1. **External plugin package**: publish a package with a `par_tts.providers` entry point. This is the preferred path for third-party providers because users can install it without forking PAR CLI TTS.
+2. **Built-in provider**: add an in-repository provider class and a built-in `ProviderPlugin` descriptor in `par_tts/providers/registry.py`.
 
 ```mermaid
 flowchart TD
-    subgraph "Extension Process"
+    subgraph "Provider Extension Process"
         Step1[1. Create Provider Class]
         Step2[2. Inherit from TTSProvider]
         Step3[3. Implement Abstract Methods]
-        Step4[4. Register in PROVIDERS]
-        Step5[5. Add Environment Variables]
-        Step6[6. Update Documentation]
+        Step4[4. Add ProviderPlugin metadata]
+        Step5{Distribution path?}
+        Step6[5a. Expose par_tts.providers entry point]
+        Step7[5b. Add built-in descriptor to registry.py]
+        Step8[6. Verify with --capabilities and tests]
+        Step9[7. Update Documentation]
     end
 
     Step1 --> Step2
     Step2 --> Step3
     Step3 --> Step4
     Step4 --> Step5
-    Step5 --> Step6
+    Step5 -->|External package| Step6
+    Step5 -->|Built-in provider| Step7
+    Step6 --> Step8
+    Step7 --> Step8
+    Step8 --> Step9
 
     subgraph "Required Implementations"
         M1[generate_speech<br/>Convert text to audio]
@@ -1140,6 +1241,7 @@ flowchart TD
         P3[default_model<br/>Default TTS model]
         P4[default_voice<br/>Default voice ID]
         PK[PROVIDER_KWARGS<br/>Provider-specific options]
+        PM[ProviderCapabilities<br/>Static capability metadata]
     end
 
     Step3 --> M1
@@ -1150,31 +1252,37 @@ flowchart TD
     Step3 --> P3
     Step3 --> P4
     Step3 --> PK
+    Step4 --> PM
 
     style Step1 fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Step2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Step3 fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
-    style Step4 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style Step5 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style Step6 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Step4 fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
+    style Step5 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style Step6 fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style Step7 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Step8 fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style Step9 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style M1 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style M2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style M3 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style M4 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style M5 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P1 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P3 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style P4 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style PK fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
+    style PM fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
 ```
 
 ### Provider Template
 
 ```python
-# par_tts/providers/new_provider.py
+# my_package/tts.py
+from collections.abc import Iterator
 from typing import Any
-from par_tts.providers.base import TTSProvider, Voice
+
+from par_tts.providers.base import ProviderCapabilities, ProviderPlugin, TTSProvider, Voice
+
 
 class NewProvider(TTSProvider):
     """New TTS provider implementation."""
@@ -1221,6 +1329,31 @@ class NewProvider(TTSProvider):
 
     # save_audio() and play_audio() are provided by the TTSProvider base class.
     # Override them only if the provider needs custom handling (e.g. ElevenLabs SDK save).
+
+
+provider_plugin = ProviderPlugin(
+    name="new-provider",
+    provider_class=NewProvider,
+    description="New provider",
+    capabilities=ProviderCapabilities(
+        formats=["mp3", "wav"],
+        supports_speed=True,
+        supports_streaming=False,
+        supports_voice_controls=False,
+    ),
+    default_model="default-model-id",
+    default_voice="default-voice-id",
+    requires_api_key=True,
+    api_key_env_vars=("NEW_PROVIDER_API_KEY",),
+    source="entry-point",
+)
+```
+
+Expose the plugin from the provider package:
+
+```toml
+[project.entry-points."par_tts.providers"]
+new-provider = "my_package.tts:provider_plugin"
 ```
 
 ## Error Handling and Recovery
@@ -1551,6 +1684,14 @@ gantt
 
 ### Recent Improvements
 
+#### Current provider-oriented updates
+
+1. **Provider Plugin Registry**: Built-in providers and third-party providers now share `ProviderPlugin` descriptors and a central registry
+2. **Entry Point Discovery**: External packages can expose providers through the `par_tts.providers` entry point group
+3. **Provider Capability Matrix**: `--capabilities` renders static provider capabilities without initializing providers or requiring API keys
+4. **Voice Benchmark Mode**: `--benchmark` compares objective latency, output size, and estimated cost across selected providers
+5. **Plugin-Aware Factory**: `create_provider()` uses plugin metadata for API key requirements, provider class selection, and external no-key providers
+
 #### v0.5.0
 
 1. **Library API Surface**: `par_tts` is now a proper importable Python library with `get_provider()`, `list_providers()`, and typed options
@@ -1590,16 +1731,15 @@ gantt
 
 ### Planned Architecture Improvements
 
-1. **Cost Tracking**: Monitor and report API usage costs
+1. **Cost Tracking**: Persist and aggregate API usage costs beyond per-run static estimates
 2. **Better Progress Feedback**: Show progress for long text processing
-3. **Plugin System**: Dynamic provider loading from external packages
-4. **Voice Profile Management**: User-specific voice preferences and presets
-5. **Advanced Caching**: Multi-tier caching with Redis support
-6. **Monitoring and Metrics**: Performance tracking and usage analytics
-7. **Web API**: RESTful API wrapper for the CLI functionality
-8. **Voice Marketplace**: Integration with voice model marketplaces
-9. **Multi-language Support**: Automatic language detection and switching
-10. **Retry Logic**: Exponential backoff for network failures
+3. **Voice Profile Management**: User-specific voice preferences and presets
+4. **Advanced Caching**: Multi-tier caching with Redis support
+5. **Monitoring and Metrics**: Performance tracking and usage analytics beyond local benchmark output
+6. **Web API**: RESTful API wrapper for the CLI functionality
+7. **Voice Marketplace**: Integration with voice model marketplaces
+8. **Multi-language Support**: Automatic language detection and switching
+9. **Retry Logic**: Exponential backoff for network failures
 
 ## Conclusion
 
@@ -1610,7 +1750,7 @@ Key architectural achievements:
 - **Performance Optimization**: Intelligent caching reduces latency and API calls
 - **User Experience**: Rich CLI feedback with helpful error messages
 - **Maintainability**: Type-safe, well-documented code with clear separation of concerns
-- **Extensibility**: New providers can be added with minimal code changes
+- **Extensibility**: New providers can be added as third-party entry-point plugins or built-in descriptors with minimal code changes
 
 This architecture positions PAR CLI TTS for future growth while maintaining stability and performance for current users.
 

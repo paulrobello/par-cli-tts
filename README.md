@@ -59,9 +59,11 @@ For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 ## Features
 
 - **Multiple TTS Providers** - Support for ElevenLabs, OpenAI, Kokoro ONNX, Deepgram (Aura / Aura-2), and Google Gemini with easy provider switching
-- **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`)
-- **Flexible Input Methods** - Accept text from command line, stdin pipe, or files (`@filename`)
+- **Configuration File** - Set default preferences in YAML config file (`~/.config/par-tts/config.yaml`) with optional named profiles
+- **Flexible Input Methods** - Accept text from command line, stdin pipe, clipboard (`--from-clipboard`), watched stdin (`--watch-stdin`), files (`@filename`), CSV/JSONL batches (`--batch`), or watched document files (`--watch`)
+- **Dry Run, Cost Estimate, and Benchmark Modes** - Inspect the resolved operation plan, estimate cloud-provider cost, or compare objective provider latency/size metrics
 - **Voice Name Support** - Use voice names like "Juniper" or "nova" instead of cryptic IDs
+- **Voice Search** - Search provider voices by name, ID, labels, or category with `--search-voices`
 - **Volume Control** - Adjust playback volume (0.0 to 5.0) across all platforms (macOS, Linux, Windows)
 - **Voice Preview** - Test voices with sample text using `--preview-voice`
 - **Smart Voice Caching** - Change detection, auto-refresh, and voice sample caching
@@ -72,7 +74,13 @@ For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 - **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
 - **Consistent Error Handling** - Clear error messages with categorized exit codes
 - **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI
-- **Debug Mode** - Comprehensive debugging with sanitized output
+- **Provider Plugins** - Built-in and third-party providers share a plugin registry with capability metadata and entry-point discovery
+- **Debug and Structured Logging** - Human-readable debug output or JSON logs for automation/telemetry ingestion
+- **Retry Controls** - Per-run or config-file retry/backoff settings for provider generation calls
+- **Offline Doctor Diagnostics** - `par-tts doctor` checks audio backends, Kokoro model files, ElevenLabs cache, and API-key environment variables without calling provider APIs
+- **Post-Generation Summary** - Compact provider/model/voice, character count, output size, playback, and elapsed-time summary after synthesis
+- **Text Processing Pipeline** - Sentence-aware chunking, lightweight SSML-like markup, per-paragraph voice sections, pronunciation dictionaries, and language auto-detection
+- **Audio Post-Processing** - Optional ffmpeg-backed normalize, trim-silence, fades, podcast/notification presets, and `--notification` low-latency mode
 - **Smart File Management** - Automatic cleanup or preservation of audio files
 
 ## Technology Stack
@@ -402,6 +410,18 @@ voices:
   deepgram: aura-2-thalia-en
   gemini: Kore
 
+# Named profiles override the base settings above when selected with --profile NAME.
+profiles:
+  podcast:
+    provider: openai
+    voice: nova
+    speed: 0.95
+    output_format: mp3
+  notifications:
+    provider: kokoro-onnx
+    voice: af_sarah
+    play_audio: true
+
 # API keys (optional - can also be set via environment variables)
 # elevenlabs_api_key: your-elevenlabs-api-key-here
 # openai_api_key: your-openai-api-key-here
@@ -420,9 +440,32 @@ speed: 1.0
 stability: 0.5
 similarity_boost: 0.75
 
+# Text processing
+chunk: false
+max_chars: 1200
+markup: false
+voice_sections: false
+pronunciations:
+  NASA: N A S A
+pronunciation_file: ~/pronunciations.yaml
+auto_lang: false
+
+# Audio post-processing (requires ffmpeg)
+normalize: false
+trim_silence: false
+post_process_preset: podcast  # podcast or notification
+fade_in_ms: 0
+fade_out_ms: 0
+
 # Behavior settings
 play_audio: true
 debug: false
+
+# Reliability / observability
+structured_logs: false  # Emit JSON logs for automation/telemetry ingestion
+log_level: WARNING      # DEBUG, INFO, WARNING, ERROR, or CRITICAL
+retry_attempts: 0       # Retries after the initial provider attempt
+retry_backoff: 0.25     # Initial exponential backoff in seconds
 ```
 
 **Voice resolution order** (highest priority first):
@@ -435,6 +478,17 @@ debug: false
 
 This means switching providers with `-P openai` will pick the right voice for that
 provider — it will not silently inherit a voice ID belonging to a different one.
+
+#### Config profiles
+
+Profiles let one config file hold multiple workflows. Select one with
+`--profile NAME`; the profile values override the base config, and explicit CLI
+options still take final precedence.
+
+```bash
+par-tts "Welcome back" --profile notifications
+par-tts @chapter.md --profile podcast --output chapter.mp3 --no-play
+```
 
 ### Environment Variables
 
@@ -542,9 +596,35 @@ par-tts --preview-voice Rachel --provider elevenlabs
 # Save to file with custom volume
 par-tts "Save this" --output audio.mp3 --volume 1.5
 
-# Inspect built-in voice-pack recommendations
+# Inspect, estimate, diagnose, or benchmark before/while generating
+par-tts "Hello" --provider openai --dry-run
+par-tts "Hello" --provider openai --estimate-cost
+par-tts doctor
+par-tts --capabilities
+par-tts "Hello" --benchmark --benchmark-provider kokoro-onnx --benchmark-provider openai
+
+# Search voices, use named profiles, and inspect built-in voice packs
+par-tts --provider openai --search-voices warm
+par-tts "Welcome back" --profile notifications
 par-tts --list-voice-packs
 par-tts --show-voice-pack assistant
+
+# Use clipboard or repeated stdin input
+par-tts --from-clipboard --provider openai
+printf 'Build complete\nTests passed\n' | par-tts --watch-stdin --provider kokoro-onnx
+
+# Workflow automation
+par-tts @template.txt --var name=Paul --var date=2026-04-26 --output greeting.mp3
+par-tts --batch prompts.csv --batch-output-dir ./audio --provider openai --no-play
+par-tts --watch ./docs --batch-output-dir ./audio --provider kokoro-onnx --no-play
+par-tts @narration.md --timestamp-output captions.srt --timestamp-format srt --output narration.mp3 --no-play
+par-tts "Build complete" --notification
+
+# Core text/audio processing
+par-tts @chapter.md --chunk --max-chars 1200 --output chapter.mp3 --no-play
+par-tts 'voice=nova | Hello\n\nvoice=onyx | Goodbye' --voice-sections
+par-tts 'NASA says <prosody rate="slow">hello</prosody>' --markup --pronunciation 'NASA=N A S A'
+par-tts @narration.md --normalize --trim-silence --post-process-preset podcast --output narration.mp3
 ```
 
 If running from source:
@@ -640,9 +720,61 @@ par-tts - < input.txt
 par-tts @readme.md
 par-tts @/absolute/path/to/file.txt
 
+# From clipboard
+par-tts --from-clipboard --voice nova
+
 # Chain commands
 fortune | par-tts --voice nova
 curl -s https://api.example.com/text | par-tts
+
+# Watch stdin line-by-line until EOF; each non-empty line is synthesized separately
+printf 'First alert\nSecond alert\n' | par-tts --watch-stdin --provider kokoro-onnx
+```
+
+#### Workflow automation
+
+Batch synthesis accepts `.csv`, `.jsonl`, or `.ndjson` files. Each row/object
+needs a text field (`text`, `message`, `script`, or `content`) and can include
+`output`, `voice`, `model`, `speed`, `lang`, `response_format`, `stability`,
+`similarity_boost`, or `instructions` metadata.
+
+```bash
+# CSV: text,voice,output
+par-tts --batch prompts.csv --batch-output-dir ./audio --provider openai --no-play
+
+# JSONL: {"text":"Hello","output":"hello.mp3","voice":"nova"}
+par-tts --batch prompts.jsonl --batch-output-dir ./audio --provider kokoro-onnx --no-play
+```
+
+Template variables render both `{{ name }}` and `{name}` placeholders in
+`@file` input, batch row text, and watched files:
+
+```bash
+par-tts @template.txt --var name=Paul --var date=2026-04-26 --output greeting.mp3
+```
+
+Docs-to-audio watch mode accepts a single file or a folder containing `.md`,
+`.markdown`, `.txt`, or `.rst` files. It regenerates `stem.mp3` files in
+`--batch-output-dir`; use `--watch-once` for one-shot automation/tests.
+
+```bash
+par-tts --watch ./docs --batch-output-dir ./audio --provider kokoro-onnx --no-play
+par-tts --watch ./docs/intro.md --watch-once --batch-output-dir ./audio --no-play
+```
+
+Timestamp export writes rough sentence timings for video workflows:
+
+```bash
+par-tts @narration.md --output narration.mp3 --timestamp-output captions.json --timestamp-format json --no-play
+par-tts @narration.md --output narration.mp3 --timestamp-output captions.srt --timestamp-format srt --no-play
+```
+
+Notification mode applies short-message defaults: OpenAI uses `tts-1`, speech
+speed is raised to `1.15`, and notification post-processing/trim-silence are
+enabled.
+
+```bash
+par-tts "Build complete" --notification
 ```
 
 #### Built-in voice packs
@@ -663,26 +795,38 @@ par-tts --show-voice-pack assistant
 #### Provider Management
 
 ```bash
-# List available providers
+# List available providers and static provider capabilities
 par-tts --list-providers
 par-tts -L
+par-tts --capabilities
 
 # List voices for a specific provider
 par-tts --provider openai --list
 par-tts -P elevenlabs -l
 par-tts --provider kokoro-onnx --list
 
-# Preview voices
+# Preview and search voices
 par-tts --preview-voice nova --provider openai
 par-tts -V Juniper -P elevenlabs
+par-tts --provider openai --search-voices warm
 
-# Show debug information (with sanitized API keys)
+# Show debug information (with sanitized API keys) or structured JSON logs
 par-tts "Test" --debug
 par-tts "Test" -d
+par-tts "Test" --structured-logs --log-level INFO
 
-# Show configuration
+# Retry provider generation after transient failures
+par-tts "Test" --provider openai --retry-attempts 2 --retry-backoff 0.5
+
+# Run offline diagnostics without provider API calls
+par-tts doctor
+
+# Show configuration, planned execution, cost, or benchmark metrics
 par-tts "Test" --dump
 par-tts "Test" -D
+par-tts "Test" --dry-run
+par-tts "Test" --provider openai --estimate-cost
+par-tts "Test" --benchmark --benchmark-repeat 3 --benchmark-provider kokoro-onnx
 ```
 
 #### Cache Management (ElevenLabs)
@@ -707,6 +851,37 @@ make clear-cache     # Clear voice cache including samples
 - **With `--keep-temp`**: Temporary files are not deleted after playback
 - **Default behavior**: Temp files are auto-deleted after playback
 
+#### Text processing pipeline
+
+PAR TTS can preprocess input before synthesis:
+
+- `--chunk --max-chars N` splits long input on paragraph/sentence boundaries and synthesizes each chunk.
+- `--markup` parses a small SSML-like subset: `<break time="500ms"/>`, `[pause=500ms]`, `<prosody rate="slow|fast|1.2">...</prosody>`, and `<emphasis>...</emphasis>`.
+- `--voice-sections` parses paragraph prefixes like `voice=nova; speed=1.1; lang=en-us | Text` so each section can use different voice/style metadata.
+- `--pronunciation WORD=spoken` can be repeated; `--pronunciation-file file.yaml` loads a YAML mapping.
+- `--auto-lang` uses no-dependency script heuristics to pass language hints where providers support them.
+
+When multiple chunks/sections are written to one `--output`, PAR TTS uses ffmpeg to join the generated segment files.
+
+#### Audio post-processing
+
+Audio post-processing is file-based and requires `ffmpeg`:
+
+```bash
+par-tts @chapter.md --output chapter.mp3 --normalize --trim-silence --no-play
+par-tts "Build complete" --post-process-preset notification
+par-tts @podcast.md --post-process-preset podcast --fade-in-ms 100 --fade-out-ms 250
+```
+
+Supported controls are `--normalize`, `--trim-silence`, `--fade-in-ms`,
+`--fade-out-ms`, and `--post-process-preset podcast|notification`.
+
+#### Post-generation summary
+
+Every successful synthesis prints a compact summary line with the provider,
+model, resolved voice, character count, output location/size when available,
+playback status, and elapsed generation/playback time.
+
 ## Command Line Options
 
 ### Core Options
@@ -718,6 +893,7 @@ make clear-cache     # Clear voice cache including samples
 | `--voice` | `-v` | Voice name or ID to use | Provider default |
 | `--output` | `-o` | Output file path | None (temp file) |
 | `--model` | `-m` | Model to use (provider-specific) | Provider default |
+| `--profile` | | Named config profile to apply | None |
 | `--play/--no-play` | `-p` | Play audio after generation | --play |
 
 ### ElevenLabs Options
@@ -750,17 +926,62 @@ make clear-cache     # Clear voice cache including samples
 | `--temp-dir` | `-t` | Directory for temporary audio files | System temp |
 | `--volume` | `-w` | Playback volume (0.0-5.0, 1.0=normal) | 1.0 |
 
+### Text Processing Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--chunk` | | Split long input into sentence-aware chunks | False |
+| `--max-chars` | | Maximum characters per chunk when `--chunk` is enabled | 1200 |
+| `--markup` | | Parse lightweight SSML-like markup | False |
+| `--voice-sections` | | Parse per-paragraph `voice=... | text` sections | False |
+| `--pronunciation` | | Pronunciation replacement as `WORD=spoken`; repeatable | None |
+| `--pronunciation-file` | | YAML mapping file of pronunciation replacements | None |
+| `--auto-lang` | | Detect input language with script heuristics | False |
+
+### Audio Post-Processing Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--normalize` | | Normalize generated audio with ffmpeg | False |
+| `--trim-silence` | | Trim leading silence with ffmpeg | False |
+| `--post-process-preset` | | Post-processing preset (`podcast` or `notification`) | None |
+| `--fade-in-ms` | | Fade-in duration in milliseconds | 0 |
+| `--fade-out-ms` | | Fade-out duration in milliseconds | 0 |
+
 ### Utility Options
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--debug` | `-d` | Show debug information (API keys sanitized) | False |
+| `--structured-logs` | | Emit JSON logs for automation/telemetry ingestion | False |
+| `--log-level` | | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) | `DEBUG` with `--debug`, otherwise `WARNING` |
+| `--retry-attempts` | | Retries after the initial provider generation attempt | 0 |
+| `--retry-backoff` | | Initial exponential retry backoff in seconds | 0.0 |
+| `doctor` | | Offline diagnostics pseudo-command: audio backends, Kokoro models, ElevenLabs cache, env vars | |
 | `--dump` | `-D` | Dump configuration and exit | False |
+| `--dry-run` | | Show the resolved operation plan without generating speech | False |
+| `--estimate-cost` | | Estimate synthesis cost without generating speech | False |
+| `--capabilities` | | Show provider formats, controls, streaming support, and API key requirements | False |
 | `--completion` | | Print shell completion script for `bash`, `zsh`, or `fish` and exit | None |
 | `--completion-install` | | Print shell-specific completion installation instructions and exit | None |
 | `--list-voice-packs` | | List bundled voice-pack recommendations and exit | False |
 | `--show-voice-pack` | | Show one bundled voice pack by name and exit | None |
+| `--benchmark` | | Run objective provider benchmark for the input text | False |
+| `--benchmark-provider` | | Provider to include in `--benchmark`; repeatable | `--provider` |
+| `--benchmark-repeat` | | Number of benchmark synthesis runs per provider | 1 |
+| `--from-clipboard` | | Read input text from the system clipboard | False |
+| `--watch-stdin` | | Read stdin line-by-line and synthesize each non-empty line until EOF | False |
+| `--batch` | | CSV/JSONL batch input with text plus optional metadata | None |
+| `--batch-output-dir` | | Directory for batch/watch generated audio files | Current directory |
+| `--var` | | Template variable as `KEY=VALUE`; repeatable | None |
+| `--watch` | | Watch a text file/folder and regenerate audio when documents change | None |
+| `--watch-once` | | Process current `--watch` inputs once, then exit | False |
+| `--watch-interval` | | Polling interval in seconds for `--watch` | 1.0 |
+| `--timestamp-output` | | Write rough timing metadata to JSON or SRT | None |
+| `--timestamp-format` | | Timestamp export format (`json` or `srt`) | json |
+| `--notification` | | Apply low-latency defaults for short notification messages | False |
 | `--list` | `-l` | List available voices for provider | False |
+| `--search-voices` | | Search voices by name, ID, labels, or category | None |
 | `--preview-voice` | `-V` | Preview a voice with sample text | None |
 | `--list-providers` | `-L` | List available TTS providers | False |
 | `--create-config` | | Create sample configuration file (prompts before overwriting) | False |
@@ -769,6 +990,31 @@ make clear-cache     # Clear voice cache including samples
 | `--clear-cache-samples` | | Clear cached voice samples | False |
 
 ## Providers
+
+### Provider plugins
+
+Providers are discovered through plugin descriptors. The bundled providers are
+registered as built-in plugins, and third-party packages can expose additional
+providers with the Python entry point group `par_tts.providers`.
+
+A plugin entry point may load one of:
+
+- a `par_tts.providers.ProviderPlugin` object
+- a zero-argument factory returning `ProviderPlugin`
+- a `TTSProvider` subclass with metadata attributes such as `plugin_name`,
+  `plugin_description`, `plugin_capabilities`, `plugin_default_model`, and
+  `plugin_requires_api_key`
+
+Example third-party `pyproject.toml`:
+
+```toml
+[project.entry-points."par_tts.providers"]
+my-provider = "my_package.tts:provider_plugin"
+```
+
+Use `par-tts --capabilities` to see built-in and installed plugin capabilities
+without initializing providers or requiring API keys. Bad third-party plugins are
+isolated and reported as diagnostics instead of preventing built-ins from loading.
 
 ### ElevenLabs
 
@@ -941,8 +1187,9 @@ par-cli-tts/
 │   ├── voice_cache.py           # ElevenLabs voice caching
 │   ├── model_downloader.py      # Kokoro ONNX model management
 │   ├── providers/               # TTS provider implementations
-│   │   ├── __init__.py          # PROVIDERS registry
-│   │   ├── base.py              # TTSProvider ABC, Voice, Options
+│   │   ├── __init__.py          # Provider exports and PROVIDERS compatibility mapping
+│   │   ├── base.py              # TTSProvider ABC, Voice, Options, plugin metadata
+│   │   ├── registry.py          # Built-in and entry-point provider plugin discovery
 │   │   ├── elevenlabs.py        # ElevenLabs implementation
 │   │   ├── openai.py            # OpenAI implementation
 │   │   ├── kokoro_onnx.py       # Kokoro ONNX (offline) implementation
