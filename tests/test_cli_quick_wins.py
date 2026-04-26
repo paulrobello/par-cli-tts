@@ -414,13 +414,23 @@ def test_missing_ffmpeg_message_is_preserved_for_chunk_join(monkeypatch, tmp_pat
         )
 
 
-def test_list_voice_packs_does_not_create_provider(monkeypatch):
+def test_list_voice_packs_does_not_create_provider_or_load_config(monkeypatch):
     runner = CliRunner()
 
     def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
         raise AssertionError("voice-pack listing should not create a provider")
 
+    def noisy_load_config(self: Any) -> None:
+        print("Loaded config from test marker")
+        raise AssertionError("voice-pack listing should not load config")
+
     monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+    monkeypatch.setattr(
+        tts_cli,
+        "load_dotenv",
+        lambda: (_ for _ in ()).throw(AssertionError("voice-pack listing should not load dotenv")),
+    )
+    monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
     result = runner.invoke(tts_cli.app, ["--list-voice-packs"])
 
@@ -428,15 +438,26 @@ def test_list_voice_packs_does_not_create_provider(monkeypatch):
     assert "Voice packs" in result.output
     assert "assistant" in result.output
     assert "alerts" in result.output
+    assert "Loaded config from" not in result.output
 
 
-def test_show_voice_pack_prints_recommendations_without_provider(monkeypatch):
+def test_show_voice_pack_prints_recommendations_without_provider_or_config(monkeypatch):
     runner = CliRunner()
 
     def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
         raise AssertionError("voice-pack display should not create a provider")
 
+    def noisy_load_config(self: Any) -> None:
+        print("Loaded config from test marker")
+        raise AssertionError("voice-pack display should not load config")
+
     monkeypatch.setattr(tts_cli, "create_provider", fail_create_provider)
+    monkeypatch.setattr(
+        tts_cli,
+        "load_dotenv",
+        lambda: (_ for _ in ()).throw(AssertionError("voice-pack display should not load dotenv")),
+    )
+    monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
     result = runner.invoke(tts_cli.app, ["--show-voice-pack", "assistant"])
 
@@ -444,16 +465,29 @@ def test_show_voice_pack_prints_recommendations_without_provider(monkeypatch):
     assert "assistant" in result.output
     assert "Provider" in result.output
     assert "Voice" in result.output
+    assert "Loaded config from" not in result.output
 
 
-def test_show_unknown_voice_pack_fails_cleanly():
+def test_show_unknown_voice_pack_fails_cleanly_without_config(monkeypatch):
     runner = CliRunner()
+
+    def noisy_load_config(self: Any) -> None:
+        print("Loaded config from test marker")
+        raise AssertionError("unknown voice-pack display should not load config")
+
+    monkeypatch.setattr(
+        tts_cli,
+        "load_dotenv",
+        lambda: (_ for _ in ()).throw(AssertionError("unknown voice-pack display should not load dotenv")),
+    )
+    monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
     result = runner.invoke(tts_cli.app, ["--show-voice-pack", "missing-pack"])
 
     assert result.exit_code != 0
     assert "Unknown voice pack" in result.output
     assert "assistant" in result.output
+    assert "Loaded config from" not in result.output
 
 
 def test_generate_completion_script_uses_typer_api_without_fallback_delegate():

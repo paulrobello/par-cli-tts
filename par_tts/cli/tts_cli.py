@@ -2017,6 +2017,22 @@ def main(
             raise typer.Exit(exc.error_type.exit_code) from exc
         return
 
+    if list_voice_packs:
+        try:
+            handle_list_voice_packs()
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
+    if show_voice_pack:
+        try:
+            handle_show_voice_pack(show_voice_pack)
+        except TTSError as exc:
+            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
+            raise typer.Exit(exc.error_type.exit_code) from exc
+        return
+
     load_dotenv()
 
     # Handle config operations
@@ -2192,34 +2208,6 @@ def main(
 
     if capabilities:
         handle_capabilities()
-        return
-
-    if list_voice_packs:
-        handle_list_voice_packs()
-        return
-
-    if show_voice_pack:
-        try:
-            handle_show_voice_pack(show_voice_pack)
-        except TTSError as exc:
-            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
-            raise typer.Exit(exc.error_type.exit_code) from exc
-        return
-
-    if completion:
-        try:
-            handle_completion(completion)
-        except TTSError as exc:
-            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
-            raise typer.Exit(exc.error_type.exit_code) from exc
-        return
-
-    if completion_install:
-        try:
-            handle_completion_install(completion_install)
-        except TTSError as exc:
-            console.print(f"[red]{exc.error_type.display_name}:[/red] {exc.message}")
-            raise typer.Exit(exc.error_type.exit_code) from exc
         return
 
     if not voice:

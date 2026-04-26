@@ -1,6 +1,6 @@
 # PAR CLI TTS — Feature & Enhancement Ideas
 
-- After implementing items from this file update project documentation and remove compelted items from this file
+- After implementing items from this file update project documentation and remove completed items from this file
 
 ## Library/API Enhancements
 
