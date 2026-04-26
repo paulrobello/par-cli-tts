@@ -22,7 +22,13 @@ class KokoroONNXProvider(TTSProvider):
         "lang": "en-us",
     }
 
-    def __init__(self, api_key: str | None = None, model_path: str | None = None, voice_path: str | None = None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model_path: str | None = None,
+        voice_path: str | None = None,
+        **kwargs: Any,
+    ):
         """Initialize Kokoro ONNX provider.
 
         Args:
@@ -35,7 +41,7 @@ class KokoroONNXProvider(TTSProvider):
                        If not provided, will check KOKORO_VOICE_PATH env var,
                        then auto-download to XDG data directory if needed.
         """
-        super().__init__(api_key=api_key)
+        super().__init__(api_key=api_key, **kwargs)
         # Check for explicitly provided paths or environment variables
         env_model_path = os.environ.get("KOKORO_MODEL_PATH")
         env_voice_path = os.environ.get("KOKORO_VOICE_PATH")

@@ -14,6 +14,7 @@ from typing import Any
 from par_tts.defaults import DEFAULT_DEEPGRAM_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
+from par_tts.retry import run_with_retries
 
 _logger = logging.getLogger(__name__)
 
@@ -221,7 +222,7 @@ class DeepgramProvider(TTSProvider):
             "Accept": "audio/*",
         }
 
-        def _stream() -> Iterator[bytes]:
+        def _iter_chunks() -> Iterator[bytes]:
             with self.client.stream(
                 "POST",
                 DEEPGRAM_TTS_ENDPOINT,
@@ -236,6 +237,17 @@ class DeepgramProvider(TTSProvider):
                 for chunk in resp.iter_bytes():
                     if chunk:
                         yield chunk
+
+        def _stream() -> Iterator[bytes]:
+            if self.retry_policy.retry_attempts == 0:
+                yield from _iter_chunks()
+                return
+            chunks = run_with_retries(
+                lambda: list(_iter_chunks()),
+                self.retry_policy,
+                operation="Deepgram speech generation",
+            )
+            yield from chunks
 
         return _stream()
 

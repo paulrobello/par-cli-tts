@@ -8,6 +8,7 @@ from openai import OpenAI
 from par_tts.defaults import DEFAULT_OPENAI_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
+from par_tts.retry import run_with_retries
 
 _logger = logging.getLogger(__name__)
 
@@ -117,7 +118,11 @@ class OpenAIProvider(TTSProvider):
         if instructions and model == "gpt-4o-mini-tts":
             request_params["instructions"] = instructions
 
-        response = self.client.audio.speech.create(**request_params)
+        response = run_with_retries(
+            lambda: self.client.audio.speech.create(**request_params),
+            self.retry_policy,
+            operation="OpenAI speech generation",
+        )
 
         # Get audio data as bytes
         audio_bytes = response.content

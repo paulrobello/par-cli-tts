@@ -14,6 +14,7 @@ with warnings.catch_warnings():
 from par_tts.defaults import DEFAULT_ELEVENLABS_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
+from par_tts.retry import run_with_retries
 from par_tts.voice_cache import VoiceCache, resolve_voice_identifier
 
 
@@ -85,14 +86,18 @@ class ElevenLabsProvider(TTSProvider):
         if model is None:
             model = self.default_model
 
-        audio = self.client.text_to_speech.convert(
-            text=text,
-            voice_id=voice,
-            model_id=model,
-            voice_settings=VoiceSettings(
-                stability=stability,
-                similarity_boost=similarity_boost,
+        audio = run_with_retries(
+            lambda: self.client.text_to_speech.convert(
+                text=text,
+                voice_id=voice,
+                model_id=model,
+                voice_settings=VoiceSettings(
+                    stability=stability,
+                    similarity_boost=similarity_boost,
+                ),
             ),
+            self.retry_policy,
+            operation="ElevenLabs speech generation",
         )
 
         # Return the generator directly for memory-efficient streaming

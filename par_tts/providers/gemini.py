@@ -15,6 +15,7 @@ from typing import Any
 from par_tts.defaults import DEFAULT_GEMINI_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
+from par_tts.retry import run_with_retries
 
 _logger = logging.getLogger(__name__)
 
@@ -161,7 +162,11 @@ class GeminiProvider(TTSProvider):
             },
         }
 
-        resp = self.client.post(url, headers=headers, json=body)
+        resp = run_with_retries(
+            lambda: self.client.post(url, headers=headers, json=body),
+            self.retry_policy,
+            operation="Gemini speech generation",
+        )
         if resp.status_code != 200:
             # Sanitize response text to avoid leaking API key in error messages
             error_text = resp.text[:500]
