@@ -6,6 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from par_tts.errors import ErrorType, TTSError
+
 
 def play_audio_with_player(file_path: Path, volume: float = 1.0) -> None:
     """Play audio using system player with volume support.
@@ -18,11 +20,19 @@ def play_audio_with_player(file_path: Path, volume: float = 1.0) -> None:
         volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double).
 
     Raises:
-        RuntimeError: If no suitable audio player is found on Linux.
+        TTSError: If no suitable audio player is installed or playback fails.
     """
     if sys.platform == "darwin":  # macOS
         # afplay supports volume flag (-v)
-        subprocess.run(["afplay", "-v", str(volume), str(file_path)], check=True)
+        if shutil.which("afplay") is None:
+            raise TTSError(
+                "Audio playback requires afplay; install or restore macOS command line audio tools.",
+                ErrorType.PROVIDER_ERROR,
+            )
+        try:
+            subprocess.run(["afplay", "-v", str(volume), str(file_path)], check=True)
+        except subprocess.CalledProcessError as e:
+            raise TTSError(f"afplay audio playback failed: {e}", ErrorType.PROVIDER_ERROR) from e
     elif sys.platform == "win32":  # Windows
         _play_audio_windows(file_path, volume)
     else:  # Linux and others
@@ -33,33 +43,46 @@ def play_audio_with_player(file_path: Path, volume: float = 1.0) -> None:
             ("mpg123", ["-f", str(int(volume * 32768))]),  # mpg123 uses scale factor
             ("aplay", []),  # aplay doesn't support volume directly
         ]
+        available_players = [(player, args) for player, args in players_with_volume if shutil.which(player)]
+        if not available_players:
+            raise TTSError(
+                "No audio player found. Install aplay, paplay, ffplay, or mpg123 to enable playback.",
+                ErrorType.PROVIDER_ERROR,
+            )
 
-        for player, volume_args in players_with_volume:
+        failures: list[str] = []
+        for player, volume_args in available_players:
             try:
                 cmd = [player] + volume_args + [str(file_path)]
                 subprocess.run(cmd, check=True)
                 return
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                continue
+            except subprocess.CalledProcessError as e:
+                failures.append(f"{player}: exit {e.returncode}")
+            except FileNotFoundError:
+                failures.append(f"{player}: not found")
 
-        raise RuntimeError("No audio player found. Install aplay, paplay, ffplay, or mpg123.")
+        raise TTSError(
+            f"Audio playback failed with installed players ({'; '.join(failures)}). "
+            "Install or configure a working player: aplay, paplay, ffplay, or mpg123.",
+            ErrorType.PROVIDER_ERROR,
+        )
 
 
-def _find_windows_audio_player() -> str | None:
+def _find_windows_audio_player() -> tuple[str, str] | None:
     """Find an available audio player on Windows.
 
     Checks for ffplay, VLC, and mpg123 in that order.
 
     Returns:
-        Name of the found player, or None if no player is available.
+        Tuple of player name and executable path, or None if no player is available.
     """
     # Prefer ffplay (comes with ffmpeg, most reliable)
-    if shutil.which("ffplay"):
-        return "ffplay"
+    if ffplay := shutil.which("ffplay"):
+        return ("ffplay", ffplay)
 
     # VLC media player — check PATH first, then common install locations.
-    if shutil.which("vlc"):
-        return "vlc"
+    if vlc := shutil.which("vlc"):
+        return ("vlc", vlc)
 
     vlc_paths = [
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
@@ -67,11 +90,11 @@ def _find_windows_audio_player() -> str | None:
     ]
     for vlc_path in vlc_paths:
         if Path(vlc_path).exists():
-            return "vlc"
+            return ("vlc", vlc_path)
 
     # mpg123 for Windows
-    if shutil.which("mpg123"):
-        return "mpg123"
+    if mpg123 := shutil.which("mpg123"):
+        return ("mpg123", mpg123)
 
     return None
 
@@ -90,8 +113,16 @@ def _play_with_powershell(file_path: Path, volume: float, timeout: int = 60) -> 
         timeout: Maximum playback time in seconds.
 
     Raises:
-        RuntimeError: If PowerShell execution fails.
+        TTSError: If PowerShell is unavailable or playback fails.
     """
+    powershell = shutil.which("powershell") or shutil.which("pwsh")
+    if powershell is None:
+        raise TTSError(
+            "Audio playback requires PowerShell, ffplay, VLC, or mpg123 on Windows. "
+            "Install ffmpeg (for ffplay), VLC, mpg123, or ensure PowerShell is available.",
+            ErrorType.PROVIDER_ERROR,
+        )
+
     # MediaPlayer volume is 0.0 to 1.0, cap values above 1.0
     media_volume = min(volume, 1.0)
 
@@ -116,7 +147,7 @@ def _play_with_powershell(file_path: Path, volume: float, timeout: int = 60) -> 
     try:
         subprocess.run(
             [
-                "powershell",
+                powershell,
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
@@ -129,9 +160,15 @@ def _play_with_powershell(file_path: Path, volume: float, timeout: int = 60) -> 
             timeout=timeout + 10,  # Extra buffer for startup/shutdown
         )
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"Audio playback timed out after {timeout} seconds") from e
+        raise TTSError(f"Audio playback timed out after {timeout} seconds", ErrorType.PROVIDER_ERROR) from e
+    except FileNotFoundError as e:
+        raise TTSError(
+            "Audio playback requires PowerShell, ffplay, VLC, or mpg123 on Windows. "
+            "Install ffmpeg (for ffplay), VLC, mpg123, or ensure PowerShell is available.",
+            ErrorType.PROVIDER_ERROR,
+        ) from e
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"PowerShell audio playback failed: {e}") from e
+        raise TTSError(f"PowerShell audio playback failed: {e}", ErrorType.PROVIDER_ERROR) from e
 
 
 def _play_audio_windows(file_path: Path, volume: float = 1.0) -> None:
@@ -145,53 +182,62 @@ def _play_audio_windows(file_path: Path, volume: float = 1.0) -> None:
         volume: Volume level (0.0 = silent, 1.0 = normal, 2.0 = double).
 
     Raises:
-        RuntimeError: If no audio playback method succeeds.
+        TTSError: If no audio playback method succeeds.
     """
-    player = _find_windows_audio_player()
+    player_info = _find_windows_audio_player()
+    player, executable = player_info if player_info else (None, None)
 
-    if player == "ffplay":
-        # ffplay uses 0-100 volume scale
-        subprocess.run(
-            [
-                "ffplay",
-                "-volume",
-                str(int(volume * 100)),
-                "-nodisp",
-                "-autoexit",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                str(file_path),
-            ],
-            check=True,
-        )
-    elif player == "vlc":
-        # VLC volume scale: 0-256 where 256 is 100%
-        # Higher values possible but 512 is 200%
-        vlc_path = r"C:\Program Files\VideoLAN\VLC\vlc.exe"
-        if not Path(vlc_path).exists():
-            vlc_path = r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"
-        subprocess.run(
-            [
-                vlc_path,
-                "--intf",
-                "dummy",
-                "--play-and-exit",
-                "--volume",
-                str(int(volume * 256)),
-                str(file_path),
-            ],
-            check=True,
-        )
-    elif player == "mpg123":
-        # mpg123 uses scale factor (32768 = normal)
-        subprocess.run(
-            ["mpg123", "-f", str(int(volume * 32768)), str(file_path)],
-            check=True,
-        )
-    else:
-        # Fallback to PowerShell MediaPlayer
-        _play_with_powershell(file_path, volume)
+    try:
+        if player == "ffplay" and executable:
+            # ffplay uses 0-100 volume scale
+            subprocess.run(
+                [
+                    executable,
+                    "-volume",
+                    str(int(volume * 100)),
+                    "-nodisp",
+                    "-autoexit",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    str(file_path),
+                ],
+                check=True,
+            )
+        elif player == "vlc" and executable:
+            # VLC volume scale: 0-256 where 256 is 100%
+            # Higher values possible but 512 is 200%
+            subprocess.run(
+                [
+                    executable,
+                    "--intf",
+                    "dummy",
+                    "--play-and-exit",
+                    "--volume",
+                    str(int(volume * 256)),
+                    str(file_path),
+                ],
+                check=True,
+            )
+        elif player == "mpg123" and executable:
+            # mpg123 uses scale factor (32768 = normal)
+            subprocess.run(
+                [executable, "-f", str(int(volume * 32768)), str(file_path)],
+                check=True,
+            )
+        else:
+            # Fallback to PowerShell MediaPlayer
+            _play_with_powershell(file_path, volume)
+    except TTSError:
+        raise
+    except FileNotFoundError as e:
+        raise TTSError(
+            "Audio playback requires ffplay, VLC, mpg123, or PowerShell on Windows. "
+            "Install ffmpeg (for ffplay), VLC, mpg123, or ensure PowerShell is available.",
+            ErrorType.PROVIDER_ERROR,
+        ) from e
+    except subprocess.CalledProcessError as e:
+        raise TTSError(f"Windows audio playback failed: {e}", ErrorType.PROVIDER_ERROR) from e
 
 
 def play_audio_bytes(audio_data: bytes, volume: float = 1.0, suffix: str = ".mp3") -> None:
