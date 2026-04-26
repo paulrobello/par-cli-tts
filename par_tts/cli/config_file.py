@@ -6,34 +6,29 @@ from typing import Any
 
 import platformdirs
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from rich.prompt import Confirm
 
 from par_tts.cli.console import console
+from par_tts.logging_config import normalize_log_level
 
 VALID_PROVIDERS = {"elevenlabs", "openai", "kokoro-onnx", "deepgram", "gemini"}
 
 
-class ConfigFile(BaseModel):
-    """Configuration file schema."""
+class ConfigProfile(BaseModel):
+    """Named profile schema for overriding base configuration settings."""
 
     # Provider settings
     provider: str | None = Field(None, description="Default TTS provider")
-    voice: str | None = Field(
-        None,
-        description="Legacy default voice (only applied when active provider matches `provider`)",
-    )
-    voices: dict[str, str] | None = Field(
-        None,
-        description="Per-provider default voices keyed by provider name (elevenlabs, openai, kokoro-onnx)",
-    )
+    voice: str | None = Field(None, description="Default voice for this profile")
+    voices: dict[str, str] | None = Field(None, description="Per-provider default voices")
     model: str | None = Field(None, description="Default model")
 
     # API keys (optional - can also be set via environment variables)
     elevenlabs_api_key: str | None = Field(None, description="ElevenLabs API key")
     openai_api_key: str | None = Field(None, description="OpenAI API key")
     deepgram_api_key: str | None = Field(None, description="Deepgram API key")
-    gemini_api_key: str | None = Field(None, description="Google Gemini API key (also accepts GOOGLE_API_KEY env var)")
+    gemini_api_key: str | None = Field(None, description="Google Gemini API key")
 
     # Output settings
     output_dir: str | None = Field(None, description="Default output directory")
@@ -52,24 +47,61 @@ class ConfigFile(BaseModel):
     # Kokoro specific
     lang: str | None = Field(None, description="Kokoro language code")
 
+    # Text processing settings
+    chunk: bool | None = Field(None, description="Split long text into sentence-aware chunks")
+    max_chars: int | None = Field(None, ge=1, description="Maximum characters per generated chunk")
+    markup: bool | None = Field(None, description="Parse lightweight SSML-like markup")
+    voice_sections: bool | None = Field(None, description="Parse per-paragraph voice/style section prefixes")
+    pronunciations: dict[str, str] | None = Field(None, description="Pronunciation replacements")
+    pronunciation_file: str | None = Field(None, description="YAML file containing pronunciation replacements")
+    auto_lang: bool | None = Field(None, description="Detect language from input text")
+
+    # Audio processing settings
+    normalize: bool | None = Field(None, description="Normalize generated audio")
+    trim_silence: bool | None = Field(None, description="Trim silence from generated audio")
+    post_process_preset: str | None = Field(None, description="Post-processing preset (podcast or notification)")
+    fade_in_ms: int | None = Field(None, ge=0, description="Fade-in duration in milliseconds")
+    fade_out_ms: int | None = Field(None, ge=0, description="Fade-out duration in milliseconds")
+
     # Behavior settings
     play_audio: bool | None = Field(None, description="Play audio after generation")
     debug: bool | None = Field(None, description="Enable debug output")
 
-    class Config:
-        """Pydantic config."""
+    # Reliability / observability settings
+    structured_logs: bool | None = Field(None, description="Emit JSON logs for automation and telemetry ingestion")
+    log_level: str | None = Field(None, description="Python logging level")
+    retry_attempts: int | None = Field(None, ge=0, le=10, description="Retries after the initial provider attempt")
+    retry_backoff: float | None = Field(None, ge=0.0, le=60.0, description="Initial retry backoff in seconds")
 
-        extra = "forbid"  # Don't allow unknown fields
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("voices")
     @classmethod
     def _validate_voices_providers(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _validate_voice_provider_keys(v)
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        unknown = set(v) - VALID_PROVIDERS
-        if unknown:
-            raise ValueError(f"Unknown provider(s) in 'voices': {sorted(unknown)}. Valid: {sorted(VALID_PROVIDERS)}")
+        return normalize_log_level(v)
+
+
+class ConfigFile(ConfigProfile):
+    """Configuration file schema."""
+
+    profiles: dict[str, ConfigProfile] | None = Field(None, description="Named config profiles")
+
+
+def _validate_voice_provider_keys(v: dict[str, str] | None) -> dict[str, str] | None:
+    """Validate per-provider voice mapping keys."""
+    if v is None:
         return v
+    unknown = set(v) - VALID_PROVIDERS
+    if unknown:
+        raise ValueError(f"Unknown provider(s) in 'voices': {sorted(unknown)}. Valid: {sorted(VALID_PROVIDERS)}")
+    return v
 
 
 class ConfigManager:
@@ -122,6 +154,31 @@ class ConfigManager:
             console.print(f"[yellow]Warning: Could not load config: {e}[/yellow]")
             return None
 
+    def apply_profile(self, config: ConfigFile, profile_name: str) -> ConfigFile:
+        """Apply a named profile over a loaded base configuration.
+
+        Args:
+            config: Loaded base configuration.
+            profile_name: Name of the profile to apply.
+
+        Returns:
+            A new ConfigFile with profile values overriding base values.
+
+        Raises:
+            ValueError: If the requested profile does not exist.
+        """
+        if not config.profiles or profile_name not in config.profiles:
+            available = ", ".join(sorted(config.profiles or {})) or "none"
+            raise ValueError(f"Unknown profile '{profile_name}'. Available profiles: {available}")
+
+        base_data = config.model_dump(exclude_none=True)
+        profiles = base_data.pop("profiles", None)
+        profile_data = config.profiles[profile_name].model_dump(exclude_none=True)
+        merged = {**base_data, **profile_data}
+        if profiles is not None:
+            merged["profiles"] = profiles
+        return ConfigFile(**merged)
+
     def create_sample_config(self, force: bool = False) -> bool:
         """Create a sample configuration file.
 
@@ -156,6 +213,17 @@ class ConfigManager:
             "# Default model",
             "# model: eleven_monolingual_v1",
             "",
+            "# Named profiles override the base settings above when selected with --profile NAME.",
+            "# profiles:",
+            "#   podcast:",
+            "#     provider: openai",
+            "#     voice: nova",
+            "#     speed: 0.95",
+            "#   notifications:",
+            "#     provider: kokoro-onnx",
+            "#     voice: af_sarah",
+            "#     play_audio: true",
+            "",
             "# API keys (optional - can also be set via environment variables)",
             "# elevenlabs_api_key: your-elevenlabs-api-key-here",
             "# openai_api_key: your-openai-api-key-here",
@@ -179,9 +247,32 @@ class ConfigManager:
             "# Kokoro ONNX specific",
             "# lang: en-us",
             "",
+            "# Text processing",
+            "# chunk: false",
+            "# max_chars: 1200",
+            "# markup: false",
+            "# voice_sections: false",
+            "# pronunciations:",
+            "#   NASA: N A S A",
+            "# pronunciation_file: ~/pronunciations.yaml",
+            "# auto_lang: false",
+            "",
+            "# Audio post-processing (requires ffmpeg)",
+            "# normalize: false",
+            "# trim_silence: false",
+            "# post_process_preset: podcast  # podcast or notification",
+            "# fade_in_ms: 0",
+            "# fade_out_ms: 0",
+            "",
             "# Behavior settings",
             "# play_audio: true",
             "# debug: false",
+            "",
+            "# Reliability / observability",
+            "# structured_logs: false  # Emit JSON logs for automation/telemetry ingestion",
+            "# log_level: WARNING      # DEBUG, INFO, WARNING, ERROR, or CRITICAL",
+            "# retry_attempts: 0      # Retries after the initial provider attempt",
+            "# retry_backoff: 0.25    # Initial exponential backoff in seconds",
         ]
 
         # Confirm before clobbering an existing config
