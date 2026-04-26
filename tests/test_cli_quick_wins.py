@@ -465,7 +465,8 @@ def test_generate_completion_script_uses_typer_api_without_fallback_delegate():
     assert 'eval "$(_PAR_TTS_COMPLETE=bash_source par-tts)"' not in script
 
 
-def test_completion_script_prints_for_supported_shell_without_provider_or_config(monkeypatch):
+@pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])
+def test_completion_script_prints_exact_script_for_supported_shell_without_provider_or_config(monkeypatch, shell):
     runner = CliRunner()
 
     def fail_create_provider(*args: Any, **kwargs: Any) -> FakeProvider:
@@ -483,12 +484,10 @@ def test_completion_script_prints_for_supported_shell_without_provider_or_config
     )
     monkeypatch.setattr("par_tts.cli.config_file.ConfigManager.load_config", noisy_load_config)
 
-    result = runner.invoke(tts_cli.app, ["--completion", "bash"])
+    result = runner.invoke(tts_cli.app, ["--completion", shell])
 
     assert result.exit_code == 0
-    assert "_PAR_TTS_COMPLETE" in result.output
-    assert "complete_bash" in result.output
-    assert "par-tts" in result.output
+    assert result.output == generate_completion_script(shell)
     assert "Loaded config from" not in result.output
     assert "Shell source not supported" not in result.output
 

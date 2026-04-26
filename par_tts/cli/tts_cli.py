@@ -800,7 +800,7 @@ def handle_show_voice_pack(name: str) -> None:
 
 def handle_completion(shell: str) -> None:
     """Print a shell completion script without provider initialization."""
-    console.print(generate_completion_script(shell), end="")
+    sys.stdout.write(generate_completion_script(shell))
 
 
 def handle_completion_install(shell: str) -> None:
