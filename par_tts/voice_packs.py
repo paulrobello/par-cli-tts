@@ -117,4 +117,6 @@ def get_voice_pack(name: str) -> VoicePack:
         return voice_packs[name]
     except KeyError as exc:
         available = ", ".join(sorted(voice_packs)) or "none"
-        raise TTSError(f"Unknown voice pack '{name}'. Available voice packs: {available}", ErrorType.INVALID_INPUT) from exc
+        raise TTSError(
+            f"Unknown voice pack '{name}'. Available voice packs: {available}", ErrorType.INVALID_INPUT
+        ) from exc
