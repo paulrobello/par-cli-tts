@@ -9,11 +9,16 @@ This document provides a comprehensive overview of the PAR CLI TTS system archit
 3. [Provider Abstraction Pattern](#provider-abstraction-pattern)
 4. [Data Flow](#data-flow)
 5. [Voice Caching System](#voice-caching-system)
-6. [Configuration Management](#configuration-management)
-7. [Build and Deployment Architecture](#build-and-deployment-architecture)
-8. [Extension Points](#extension-points)
-9. [Error Handling and Recovery](#error-handling-and-recovery)
-10. [Performance Considerations](#performance-considerations)
+6. [Model Management System](#model-management-system)
+7. [Configuration Management](#configuration-management)
+8. [Build and Deployment Architecture](#build-and-deployment-architecture)
+9. [Extension Points](#extension-points)
+10. [Error Handling and Recovery](#error-handling-and-recovery)
+11. [Performance Considerations](#performance-considerations)
+12. [Security Considerations](#security-considerations)
+13. [Future Enhancements](#future-enhancements)
+14. [Conclusion](#conclusion)
+15. [Related Documentation](#related-documentation)
 
 ## System Overview
 
@@ -24,22 +29,30 @@ PAR CLI TTS is a command-line text-to-speech tool that provides a unified interf
 ```mermaid
 graph TB
     subgraph "User Interface Layer"
-        CLI[CLI Interface<br/>cli/tts_cli.py]
-        KCLI[Kokoro CLI<br/>cli/kokoro_cli.py]
+        CLI[CLI Interface<br/>par_tts/cli/tts_cli.py]
+        KCLI[Kokoro CLI<br/>par_tts/cli/kokoro_cli.py]
         ENV[Environment Variables<br/>.env]
         CONF[Config File<br/>~/.config/par-tts/config.yaml]
     end
 
     subgraph "Core Application Layer"
-        PM[Provider Manager]
+        PF[Provider Factory<br/>provider_factory.py]
         PR[Provider Registry<br/>providers/registry.py]
+        PIPE[Speech Pipeline<br/>pipeline.py]
+        TEXT[Text Processing<br/>text_processing.py]
+        APROC[Audio Processing<br/>audio_processing.py]
+        WF[Workflow Automation<br/>workflow.py]
         VC[Voice Cache<br/>voice_cache.py]
         MD[Model Downloader<br/>model_downloader.py]
-        CFG[Configuration Manager<br/>cli/config_file.py]
+        CFG[Configuration Manager<br/>par_tts/cli/config_file.py]
+        DIAG[Diagnostics<br/>diagnostics.py]
         ERR[Error Handler<br/>errors.py]
+        LOG[Logging Config<br/>logging_config.py]
+        RETRY[Retry Policy<br/>retry.py]
+        COST[Cost Estimates<br/>costs.py]
         UTIL[Utilities<br/>utils.py]
-        AUDIO[Audio Playback<br/>audio.py]
-        CONS[Console<br/>cli/console.py]
+        APB[Audio Playback<br/>audio.py]
+        CONS[Console<br/>par_tts/cli/console.py]
         HTTP[HTTP Client<br/>http_client.py]
         DFLT[Defaults<br/>defaults.py]
     end
@@ -66,23 +79,34 @@ graph TB
     subgraph "Storage Layer"
         CACHE[(Voice Cache<br/>YAML)]
         MODELS[(Model Files<br/>ONNX/BIN)]
-        AUDIO[Audio Files<br/>MP3/WAV/etc]
+        AFILE[Audio Files<br/>MP3/WAV/etc]
     end
 
-    CLI --> PM
+    CLI --> PF
     CLI --> PR
     CLI --> CFG
     CLI --> ERR
     CLI --> CONS
+    CLI --> PIPE
+    CLI --> WF
+    CLI --> DIAG
+    CLI --> LOG
+    CLI --> COST
     KCLI --> MD
     KCLI --> CONS
     ENV --> CFG
     CONF --> CFG
-    PM --> PR
+    PF --> PR
     PR --> BASE
-    PM --> UTIL
-    PM --> DFLT
-    BASE --> AUDIO
+    PIPE --> BASE
+    PIPE --> TEXT
+    PIPE --> APROC
+    WF --> TEXT
+    WF --> APROC
+    PF --> UTIL
+    PF --> DFLT
+    BASE --> APB
+    BASE --> RETRY
     BASE --> EL
     BASE --> OA
     BASE --> KO
@@ -103,26 +127,34 @@ graph TB
     FP --> FAPI
     VC --> CACHE
     MD --> MODELS
-    EL --> AUDIO
-    OA --> AUDIO
-    KO --> AUDIO
-    DG --> AUDIO
-    GM --> AUDIO
+    EL --> AFILE
+    OA --> AFILE
+    KO --> AFILE
+    DG --> AFILE
+    GM --> AFILE
     ERR --> CONS
 
     style CLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style KCLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style ENV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style PM fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style PF fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style PR fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style PIPE fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style TEXT fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style APROC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style WF fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style MD fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style CONF fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CFG fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style DIAG fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style ERR fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
+    style LOG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style RETRY fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style COST fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style UTIL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style CONS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style AUDIO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style APB fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style HTTP fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style DFLT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style BASE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -140,7 +172,7 @@ graph TB
     style FAPI fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style CACHE fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style MODELS fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style AUDIO fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style AFILE fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
 ```
 
 ### Key Design Principles
@@ -162,18 +194,16 @@ graph TB
 
 The main entry point that handles:
 - Command-line argument parsing using Typer with short flags
-- Multiple input methods (direct text, stdin, @filename)
-- Provider selection and initialization through plugin metadata
-- Voice resolution and validation
-- Voice preview functionality
-- Provider capability matrix output (`--capabilities`)
+- Multiple input methods: direct text, stdin, `@filename`, clipboard, watched stdin, batch files, and watched document files
+- Configuration loading, named profiles, and provider selection through plugin metadata
+- Voice resolution, validation, search, preview, and provider capability output (`--capabilities`)
 - Metadata-only shell completion helpers (`--completion`, `--completion-install`)
 - Metadata-only bundled voice-pack listing/display (`--list-voice-packs`, `--show-voice-pack`)
-- Objective benchmark orchestration (`--benchmark`)
-- Audio generation orchestration with streaming
-- Volume control for playback
-- File management and cleanup
-- Sanitized debug output
+- Dry-run, static cost-estimate, objective benchmark, and offline doctor diagnostics modes
+- Text processing orchestration for chunking, lightweight markup, pronunciation dictionaries, voice sections, and language hints
+- Workflow automation for templates, CSV/JSONL batches, docs-to-audio watch mode, watched stdin, notification defaults, and timestamp exports
+- Audio generation, ffmpeg-backed post-processing, playback volume, file management, cleanup, and generation summaries
+- Sanitized debug output, structured logging, and configurable retry/backoff
 
 **Related CLIs:**
 - `par-tts`: Main text-to-speech conversion
@@ -216,6 +246,31 @@ The top-level `par_tts` API exposes stable provider-neutral helpers where librar
 - `estimate_synthesis_cost()` exposes static planning estimates without provider initialization
 - `collect_diagnostics()` exposes offline support checks
 - `ModelDownloader` exposes Kokoro model management for embedded offline applications
+
+#### Text and Audio Processing (`par_tts/text_processing.py`, `par_tts/audio_processing.py`)
+
+Provider-neutral processing modules keep pre- and post-synthesis features reusable from both CLI and library code:
+- `TextProcessingOptions` controls sentence-aware chunking, lightweight SSML-like markup, per-section voice metadata, pronunciation replacements, and script-based language hints
+- `build_text_segments()` converts raw text into `TextSegment` objects that carry text, voice, language, speed, and pause metadata
+- `AudioProcessingOptions` controls ffmpeg-backed normalization, silence trimming, fades, and `podcast` / `notification` presets
+- `concat_audio_files()` joins multi-segment output, and `postprocess_audio_file()` applies filters in place
+
+#### Workflow Automation (`par_tts/workflow.py`)
+
+Workflow helpers keep automation concerns out of provider implementations:
+- `parse_batch_records()` reads CSV, JSONL, and NDJSON records with optional per-row output and metadata
+- `render_template()` applies repeated `KEY=VALUE` template variables to file, batch, and watched-document input
+- `discover_watch_inputs()` and `changed_watch_inputs()` power docs-to-audio watch mode for text-like files
+- `build_timestamp_entries()` and `write_timestamp_export()` generate rough JSON or SRT caption timing metadata
+- `NotificationDefaults` applies short-message defaults without changing explicit user settings
+
+#### Diagnostics, Logging, and Reliability
+
+Operational support is split into focused modules:
+- `par_tts.diagnostics` performs offline checks for audio backends, Kokoro model files, ElevenLabs cache state, and API-key environment variables
+- `par_tts.logging_config` configures human-readable logs or structured JSON logs for automation
+- `par_tts.retry.RetryPolicy` and `run_with_retries()` provide configurable retry/backoff for provider generation calls
+- `par_tts.costs` exposes static synthesis cost estimates for planning and benchmark output
 
 #### 3. Provider Plugin Registry (`par_tts/providers/registry.py`)
 
@@ -261,6 +316,7 @@ Central discovery and metadata boundary for providers:
 - REST `/v1/speak` integration via httpx (no SDK dependency)
 - Aura and Aura-2 voice catalog (English, Spanish, Dutch, French, German, Italian, Japanese)
 - Streaming chunked download — audio writes to file as it arrives
+- Optional `sample_rate` support for formats that accept it
 - Voice resolution accepts full ID, ID prefix, or speaker name
 - Default model/voice: aura-2-thalia-en
 - Supported formats: mp3, wav, flac, opus, aac
@@ -290,7 +346,7 @@ Intelligent caching layer for voice data:
 
 Automatic model management for offline providers:
 - XDG-compliant data storage
-- Progress indicators with transfer speeds
+- Status logging for downloads and verification
 - Automatic download on first use
 - SHA256 checksum verification
 - Model verification and cleanup
@@ -321,9 +377,13 @@ YAML-based configuration file support:
 - `ConfigManager`: Load, validate, and merge configurations
 - XDG-compliant config location (~/.config/par-tts/config.yaml; `~/Library/Application Support/par-tts/config.yaml` on macOS)
 - Sample config generation (`--create-config`, with confirmation before overwrite; `-y/--yes` to skip the prompt)
+- Named profiles selected with `--profile NAME` for reusable workflow presets
 - Per-provider voice mapping (`voices:`) keyed by provider name
-- CLI argument precedence over config file
-- Configuration schema validation with Pydantic (rejects unknown providers in `voices:`)
+- Text-processing settings for chunking, markup, voice sections, pronunciations, pronunciation files, and language hints
+- Audio post-processing settings for normalization, silence trimming, fades, and presets
+- Reliability and observability settings for structured logs, log levels, retry attempts, and retry backoff
+- CLI argument precedence over config file and profile values
+- Configuration schema validation with Pydantic (rejects unknown providers in `voices:` and unknown extra fields)
 - Config file permissions enforced to 0600 (owner-only read/write)
 
 #### 10. Error Handling Module (`par_tts/errors.py`)
@@ -389,7 +449,7 @@ Dedicated CLI for Kokoro ONNX model management:
 sequenceDiagram
     participant User
     participant CLI
-    participant ProviderManager
+    participant ProviderFactory as Provider Factory / Registry
     participant Provider
     participant Cache
     participant ModelDownloader
@@ -398,14 +458,14 @@ sequenceDiagram
 
     User->>CLI: par-tts "Hello world" --voice "Rachel"
     CLI->>CLI: Load environment variables
-    CLI->>ProviderManager: Create provider instance
+    CLI->>ProviderFactory: Resolve ProviderPlugin and create provider instance
 
     alt Kokoro ONNX Provider
-        ProviderManager->>Provider: Initialize without API key
+        ProviderFactory->>Provider: Initialize without required API key
         Provider->>ModelDownloader: Check/download models
         ModelDownloader-->>Provider: Model paths
     else Cloud Provider
-        ProviderManager->>Provider: Initialize with API key
+        ProviderFactory->>Provider: Initialize with config/env API key
     end
 
     CLI->>Provider: Resolve voice("Rachel")
@@ -450,7 +510,9 @@ classDiagram
         +api_key: str | None
         +PROVIDER_KWARGS: dict~str, Any~
         +generate_speech(text, voice, model) bytes | Iterator~bytes~
+        +generate_speech_async(text, voice, model) AsyncAudioData
         +list_voices() list~Voice~
+        +list_voices_async() list~Voice~
         +resolve_voice(identifier) str
         +save_audio(data, path) None
         +stream_to_file(stream, path) None
@@ -464,8 +526,8 @@ classDiagram
     class Voice {
         +id: str
         +name: str
-        +labels: list~str~
-        +category: str
+        +labels: list~str~ | None
+        +category: str | None
     }
 
     class ProviderCapabilities {
@@ -473,6 +535,8 @@ classDiagram
         +supports_speed: bool
         +supports_streaming: bool
         +supports_voice_controls: bool
+        +supports_instructions: bool
+        +supports_sample_rate: bool
     }
 
     class ProviderPlugin {
@@ -484,6 +548,8 @@ classDiagram
         +default_voice: str | None
         +requires_api_key: bool
         +api_key_env_vars: tuple~str~
+        +source: str
+        +cost_per_million_chars: float | None
     }
 
     class ProviderRegistry {
@@ -517,7 +583,7 @@ classDiagram
         +model_path: str
         +voice_path: str
         +PROVIDER_KWARGS: speed, lang
-        +generate_speech(text, voice, model, speed, lang)
+        +generate_speech(text, voice, model, output_format, **kwargs)
         +list_voices()
         +resolve_voice(identifier)
     }
@@ -525,7 +591,7 @@ classDiagram
     class DeepgramProvider {
         +client: httpx.Client
         +VOICE_IDS: frozenset
-        +generate_speech(text, voice, model, response_format)
+        +generate_speech(text, voice, model, response_format, sample_rate)
         +list_voices()
         +resolve_voice(identifier)
     }
@@ -587,6 +653,8 @@ classDiagram
     style ElevenLabsProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style OpenAIProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style KokoroONNXProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style DeepgramProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style GeminiProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style VoiceCache fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style ModelDownloader fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
 ```
@@ -656,6 +724,8 @@ flowchart TD
     style Benchmark fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
 ```
 
+> **📝 Note:** Registry capabilities describe provider/library support that can be inspected without initializing providers. CLI-exposed generation options are a narrower set wired through Typer options and each provider class's `PROVIDER_KWARGS`; for example, Deepgram has provider-level `sample_rate` support, but there is not currently a top-level `--sample-rate` CLI flag.
+
 ## Data Flow
 
 ### TTS Request Processing Flow
@@ -664,26 +734,35 @@ flowchart TD
 flowchart TD
     Start([User Input]) --> Input{Input Type?}
     Input -->|Direct Text| Parse[Parse CLI Arguments]
-    Input -->|Stdin Pipe| ReadStdin[Read from Stdin]
+    Input -->|Stdin Pipe / - / --watch-stdin| ReadStdin[Read from Stdin]
     Input -->|@filename| ReadFile[Read from File]
+    Input -->|--from-clipboard| Clipboard[Read Clipboard]
+    Input -->|--batch CSV/JSONL| Batch[Parse Batch Records]
+    Input -->|--watch file/folder| Watch[Discover Watched Documents]
 
     ReadStdin --> Parse
     ReadFile --> Parse
-    Parse --> LoadEnv[Load Environment Variables]
-    LoadEnv --> Operation{Metadata-only operation?}
+    Clipboard --> Parse
+    Batch --> Parse
+    Watch --> Parse
+    Parse --> LoadConfig[Load .env, Config File, and Profile]
+    LoadConfig --> Operation{Operation type?}
 
     Operation -->|--capabilities| Capabilities[Render plugin capability matrix]
     Operation -->|--completion / --completion-install| Completions[Render shell completion script or install instructions]
     Operation -->|--list-voice-packs / --show-voice-pack| VoicePacks[Load packaged YAML via par_tts.voice_packs and render recommendations]
+    Operation -->|doctor| Diagnostics[Run offline diagnostics]
     Operation -->|--dry-run / --estimate-cost| StaticOutput[Render static plan or cost estimate]
     Operation -->|Synthesis / Benchmark| SelectProvider[Resolve ProviderPlugin]
     Capabilities --> End
     Completions --> End
     VoicePacks --> End
+    Diagnostics --> End
     StaticOutput --> End
 
     SelectProvider --> CreateProvider[Create provider from plugin metadata]
-    CreateProvider --> ResolveVoice[Resolve Voice]
+    CreateProvider --> TextProcess[Apply template variables and text processing]
+    TextProcess --> ResolveVoice[Resolve Voice]
 
     ResolveVoice --> CachePath{Provider uses voice cache?}
     CachePath -->|ElevenLabs| CheckCache{Cache Valid?}
@@ -698,13 +777,15 @@ flowchart TD
     BenchmarkRun --> End
     BenchmarkDecision -->|No| GenerateTTS[Generate TTS]
     GenerateTTS --> ReceiveAudio[Receive Audio Data]
-
     ReceiveAudio --> SaveDecision{Save to File?}
     SaveDecision -->|Yes| SaveFile[Save Audio File]
     SaveDecision -->|No| TempFile[Create Temp File]
 
-    SaveFile --> PlayDecision{Play Audio?}
-    TempFile --> PlayDecision
+    SaveFile --> PostProcess{Post-processing enabled?}
+    TempFile --> PostProcess
+    PostProcess -->|Yes| ProcessAudio[Apply ffmpeg filters]
+    PostProcess -->|No| PlayDecision{Play Audio?}
+    ProcessAudio --> PlayDecision
 
     PlayDecision -->|Yes| PlayAudio[Play Audio]
     PlayDecision -->|No| Skip[Skip Playback]
@@ -720,12 +801,17 @@ flowchart TD
 
     style Start fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Parse fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style LoadEnv fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Clipboard fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style Batch fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style Watch fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style LoadConfig fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Operation fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style Capabilities fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style Diagnostics fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style StaticOutput fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style SelectProvider fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style CreateProvider fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style TextProcess fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style ResolveVoice fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CachePath fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style BenchmarkDecision fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
@@ -736,6 +822,8 @@ flowchart TD
     style UseVoice fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style GenerateTTS fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style ReceiveAudio fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style PostProcess fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style ProcessAudio fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style SaveDecision fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style SaveFile fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style TempFile fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -748,7 +836,9 @@ flowchart TD
     style End fill:#2e7d32,stroke:#66bb6a,stroke-width:2px,color:#ffffff
 ```
 
-### Voice Resolution Flow
+### ElevenLabs Voice Resolution Flow
+
+The cache and 20-character ID heuristic are ElevenLabs-specific. OpenAI resolves against a static voice catalog, Kokoro ONNX resolves against local model voices, Deepgram resolves full IDs, prefixes, or speaker names, and Gemini resolves canonical prebuilt voice names.
 
 ```mermaid
 flowchart TD
@@ -821,7 +911,7 @@ graph TB
         end
 
         subgraph "Cache Data Structure"
-            DATA["{<br/>voices: {id: {name, labels, category}},<br/>timestamp: ISO8601,<br/>voice_hash: SHA256,<br/>samples: {id: {text, audio}}<br/>}"]
+            DATA["{<br/>voices: {id: {name, labels, category}},<br/>timestamp: ISO8601,<br/>last_check: ISO8601,<br/>voice_hash: SHA256,<br/>samples: {id: {text, audio}}<br/>}"]
             HMAC[Integrity HMAC<br/># integrity: HMAC-SHA256]
         end
     end
@@ -892,7 +982,7 @@ stateDiagram-v2
         - ID, Name
         - Labels
         - Category
-        - Timestamp
+        - Timestamp and last check
         - HMAC-SHA256 integrity
     end note
 ```
@@ -916,15 +1006,15 @@ graph TB
 
         subgraph "Model Operations"
             CHECK[Check Existence]
-            DOWNLOAD[Download with Progress]
+            DOWNLOAD[Download with Status Logs]
             VERIFY[Verify Integrity]
             CLEAR[Clear Models]
             INFO[Get Model Info]
         end
 
         subgraph "Download Features"
-            PROG[Progress Indicators]
-            SPEED[Transfer Speed Display]
+            STATUS[Download Status Logging]
+            TEMPFILE[Restricted Temp Files<br/>0600 permissions]
             RESUME[Atomic Downloads<br/>via .tmp files]
             RETRY[Error Recovery]
         end
@@ -945,8 +1035,8 @@ graph TB
     CHECK --> LIN
     CHECK --> WIN
 
-    DOWNLOAD --> PROG
-    DOWNLOAD --> SPEED
+    DOWNLOAD --> STATUS
+    DOWNLOAD --> TEMPFILE
     DOWNLOAD --> RESUME
     DOWNLOAD --> RETRY
 
@@ -962,8 +1052,8 @@ graph TB
     style VERIFY fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CLEAR fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style INFO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style PROG fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style SPEED fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style STATUS fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style TEMPFILE fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RESUME fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RETRY fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style MODEL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -998,12 +1088,12 @@ sequenceDiagram
             Note over ModelDownloader: Total: ~106 MB<br/>Using int8 quantized model
 
             ModelDownloader->>GitHub: Download kokoro-v1.0.int8.onnx
-            GitHub-->>ModelDownloader: Stream file with progress
-            ModelDownloader->>FileSystem: Save as kokoro-v1.0.onnx
+            GitHub-->>ModelDownloader: Download file to restricted temp path
+            ModelDownloader->>FileSystem: Verify checksum and rename as kokoro-v1.0.onnx
 
             ModelDownloader->>GitHub: Download voices-v1.0.bin
-            GitHub-->>ModelDownloader: Stream file with progress
-            ModelDownloader->>FileSystem: Save voices file
+            GitHub-->>ModelDownloader: Download file to restricted temp path
+            ModelDownloader->>FileSystem: Verify checksum and save voices file
 
             ModelDownloader->>User: ✨ Models ready!
         end
@@ -1044,7 +1134,7 @@ flowchart TD
     DL --> FORCE
     CLEAR --> YES
 
-    DL --> DOWNLOAD_FLOW[Download with progress]
+    DL --> DOWNLOAD_FLOW[Download with status logs]
     INFO --> SHOW_STATUS[Display file sizes & paths]
     PATH --> SHOW_PATHS[Show XDG directories]
     CLEAR --> DELETE_FILES[Remove model files]
@@ -1066,41 +1156,60 @@ flowchart TD
 graph TD
     subgraph "Configuration Sources - Priority Order"
         CLI[1. CLI Arguments<br/>Highest Priority<br/>All with short flags]
-        CONF[2. Config File<br/>~/.config/par-tts/config.yaml]
-        ENV[3. Environment Variables]
-        DEFAULT[4. Default Values<br/>Lowest Priority]
+        PROFILE[2. Named Profile<br/>Selected with --profile]
+        CONF[3. Base Config File<br/>~/.config/par-tts/config.yaml]
+        ENV[4. Environment Variables]
+        DEFAULT[5. Default Values<br/>Lowest Priority]
     end
 
     subgraph "Configuration Types"
         AUTH[Authentication<br/>API Keys]
         PROVIDER[Provider Settings<br/>Model, Voice]
-        AUDIO[Audio Settings<br/>Format, Speed]
+        TEXTCFG[Text Processing<br/>Chunking, Markup, Pronunciations]
+        AUDIO[Audio Settings<br/>Format, Speed, Post-processing]
         OUTPUT[Output Settings<br/>File Path, Playback]
+        REL[Reliability and Observability<br/>Logging, Retry]
     end
 
     CLI --> PROVIDER
+    CLI --> TEXTCFG
     CLI --> AUDIO
     CLI --> OUTPUT
+    CLI --> REL
+
+    PROFILE --> PROVIDER
+    PROFILE --> TEXTCFG
+    PROFILE --> AUDIO
+    PROFILE --> OUTPUT
+    PROFILE --> REL
 
     ENV --> AUTH
     ENV --> PROVIDER
 
+    CONF --> AUTH
     CONF --> PROVIDER
+    CONF --> TEXTCFG
     CONF --> AUDIO
     CONF --> OUTPUT
+    CONF --> REL
 
     DEFAULT --> PROVIDER
     DEFAULT --> AUDIO
 
     style CLI fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style PROFILE fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style ENV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CONF fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style DEFAULT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style AUTH fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style PROVIDER fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style TEXTCFG fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style AUDIO fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style OUTPUT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style REL fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
 ```
+
+> **📝 Note:** CLI options have highest precedence. Typer also injects `TTS_PROVIDER` and `TTS_VOICE_ID` through CLI option environment-variable bindings, so those two environment variables behave like option values and can override config-file provider or voice settings. API key lookup is provider-specific: config-file key fields are checked before provider-declared environment variables.
 
 ### Environment Variables
 
@@ -1142,9 +1251,11 @@ flowchart LR
     end
 
     subgraph "CI/CD - GitHub Actions"
-        BUILD[Build Workflow]
-        TAG[Auto-Tagging]
-        PUBLISH[Publish Workflow]
+        DISPATCH[Manual Workflow Dispatch]
+        BUILD[Build and Check Job]
+        ARTIFACT[Dist Artifact Upload]
+        PUBLISH[Publish Jobs]
+        RELEASE[Optional GitHub Release]
     end
 
     subgraph "Distribution"
@@ -1156,16 +1267,21 @@ flowchart LR
 
     CODE --> LINT
     CODE --> TYPE
+    CODE --> TEST
+    DISPATCH --> BUILD
     LINT --> BUILD
     TYPE --> BUILD
+    TEST --> BUILD
 
     BUILD --> HATCH
     HATCH --> VERSION
     HATCH --> WHEEL
     HATCH --> SDIST
+    WHEEL --> ARTIFACT
+    SDIST --> ARTIFACT
 
-    BUILD --> TAG
-    TAG --> PUBLISH
+    ARTIFACT --> PUBLISH
+    ARTIFACT --> RELEASE
 
     PUBLISH --> TEST_PYPI
     PUBLISH --> PYPI
@@ -1177,9 +1293,11 @@ flowchart LR
     style HATCH fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style UV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style VERSION fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style DISPATCH fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style BUILD fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
-    style TAG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style ARTIFACT fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style PUBLISH fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style RELEASE fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style WHEEL fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style SDIST fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style PYPI fill:#2e7d32,stroke:#66bb6a,stroke-width:2px,color:#ffffff
@@ -1195,29 +1313,29 @@ sequenceDiagram
     participant GA as GitHub Actions
     participant PyPI as PyPI
 
-    Dev->>GH: Push to main branch
-    GH->>GA: Trigger publish.yml
+    Dev->>GH: Manually dispatch publish.yml
+    GH->>GA: Start Build and Check job
 
-    GA->>GA: Setup Python 3.13
-    GA->>GA: Install UV
-    GA->>GA: Install dependencies
-    GA->>GA: Run linting (Ruff)
-    GA->>GA: Run type checking (Pyright)
-    GA->>GA: Build packages
+    GA->>GA: Set up Python
+    GA->>GA: Install uv and dependencies
+    GA->>GA: Extract version from par_tts.__version__
+    GA->>GA: Run typecheck, lint, and tests unless skipped
+    GA->>GA: Build wheel and source distribution
+    GA->>GA: Upload dist artifact
 
-    alt Build successful
-        GA->>GA: Cache artifacts
-        GA->>GA: Get version from __init__.py
-        GA->>GH: Create version tag
+    alt Publish target includes TestPyPI
+        GA->>PyPI: Publish artifact to TestPyPI
+        PyPI-->>Dev: Test package available
+    end
 
-        alt Manual release
-            Dev->>GH: Trigger publish workflow
-            GH->>GA: Run publish.yml
-            GA->>PyPI: Upload packages
-            PyPI-->>Dev: Package available
-        end
-    else Build failed
-        GA-->>Dev: Failure notification
+    alt Publish target includes PyPI
+        GA->>PyPI: Publish artifact to PyPI
+        PyPI-->>Dev: Package available
+    end
+
+    alt GitHub Release requested
+        GA->>GA: Sign distributions with Sigstore
+        GA->>GH: Create release and upload artifacts
     end
 ```
 
@@ -1384,70 +1502,54 @@ new-provider = "my_package.tts:provider_plugin"
 
 ```mermaid
 flowchart TD
-    subgraph "Error Categories"
-        AUTH[Authentication Errors]
-        NET[Network Errors]
-        VOICE[Voice Resolution Errors]
-        AUDIO[Audio Processing Errors]
-        FILE[File System Errors]
+    subgraph "Error Sources"
+        AUTH[Missing or Invalid API Key]
+        NET[Provider / Network Failure]
+        VOICE[Voice Resolution Failure]
+        AUDIO[Audio Processing Failure]
+        FILE[File or Permission Failure]
+        CONFIG[Configuration Validation Failure]
     end
 
-    subgraph "Error Handlers"
-        H1[API Key Validation]
-        H2[Retry with Backoff]
-        H3[Voice Suggestions]
-        H4[Format Conversion]
-        H5[Permission Checks]
+    subgraph "Handling Boundary"
+        VALIDATE[Validate Inputs and API Keys]
+        RETRY[Provider RetryPolicy<br/>when configured]
+        PROVIDER[Provider-specific Error Message]
+        HANDLE[handle_error]
+        TTSERR[TTSError with ErrorType]
     end
 
-    subgraph "Recovery Actions"
-        R1[Prompt for API Key]
-        R2[Use Cache Fallback]
-        R3[List Available Voices]
-        R4[Use Default Format]
-        R5[Alternative Directory]
+    subgraph "Caller Behavior"
+        LIB[Library Caller<br/>catches TTSError]
+        CLI[CLI Boundary<br/>prints message and exits]
+        DEBUG[Debug / Structured Logs]
     end
 
-    subgraph "User Feedback"
-        MSG[Rich Console Messages]
-        DEBUG[Debug Information]
-        SUGGEST[Helpful Suggestions]
-    end
-
-    AUTH --> H1 --> R1
-    NET --> H2 --> R2
-    VOICE --> H3 --> R3
-    AUDIO --> H4 --> R4
-    FILE --> H5 --> R5
-
-    R1 --> MSG
-    R2 --> MSG
-    R3 --> SUGGEST
-    R4 --> MSG
-    R5 --> MSG
-
-    H1 --> DEBUG
-    H2 --> DEBUG
-    H3 --> DEBUG
+    AUTH --> VALIDATE --> HANDLE
+    NET --> RETRY --> PROVIDER --> HANDLE
+    VOICE --> PROVIDER --> HANDLE
+    AUDIO --> HANDLE
+    FILE --> HANDLE
+    CONFIG --> HANDLE
+    HANDLE --> TTSERR
+    TTSERR --> LIB
+    TTSERR --> CLI
+    HANDLE --> DEBUG
 
     style AUTH fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style NET fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style VOICE fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style AUDIO fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style FILE fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
-    style H1 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style H2 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style H3 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style H4 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style H5 fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style R1 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style R2 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style R3 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style R4 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style R5 fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-    style MSG fill:#2e7d32,stroke:#66bb6a,stroke-width:2px,color:#ffffff
+    style CONFIG fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
+    style VALIDATE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style RETRY fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style PROVIDER fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style HANDLE fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style TTSERR fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style LIB fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style CLI fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style DEBUG fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style SUGGEST fill:#2e7d32,stroke:#66bb6a,stroke-width:2px,color:#ffffff
 ```
 
 ### Error Recovery Flow
@@ -1457,51 +1559,38 @@ stateDiagram-v2
     [*] --> Operation: TTS Request
 
     Operation --> Success: No Errors
-    Operation --> Error: Exception Caught
+    Operation --> Failure: Exception Raised
 
-    Error --> IdentifyType: Classify Error
+    Failure --> RetryConfigured: Provider call supports retry and attempts remain
+    RetryConfigured --> Operation: Retry with exponential backoff
+    RetryConfigured --> Classify: Attempts exhausted
+    Failure --> Classify: No retry path
 
-    IdentifyType --> AuthError: Authentication
-    IdentifyType --> NetworkError: Network
-    IdentifyType --> VoiceError: Voice Not Found
-    IdentifyType --> FileError: File System
+    Classify --> UserError: Invalid input, provider, voice, or API key
+    Classify --> SystemError: Network, API, or provider failure
+    Classify --> FileError: Permission, disk, or write failure
+    Classify --> ConfigError: Config or cache failure
 
-    AuthError --> CheckEnv: Check Environment
-    CheckEnv --> PromptUser: Missing API Key
-    CheckEnv --> ValidateKey: Key Present
-    ValidateKey --> Retry: Valid
-    ValidateKey --> Fail: Invalid
+    UserError --> RaiseTTSError
+    SystemError --> RaiseTTSError
+    FileError --> RaiseTTSError
+    ConfigError --> RaiseTTSError
 
-    NetworkError --> CheckCache: Cache Available?
-    CheckCache --> UseCache: Yes
-    CheckCache --> RetryNetwork: No
-    RetryNetwork --> Retry: With Backoff
-    RetryNetwork --> Fail: Max Retries
-
-    VoiceError --> SuggestVoices: List Similar
-    SuggestVoices --> UserSelect: User Choice
-    UserSelect --> Retry: New Voice
-
-    FileError --> CheckPerms: Permissions
-    CheckPerms --> AltLocation: Try Alternative
-    AltLocation --> Retry: New Path
-    AltLocation --> Fail: No Write Access
-
-    UseCache --> Success: Cached Data
-    Retry --> Operation: Retry Operation
+    RaiseTTSError --> LibraryMode: Raise catchable TTSError
+    RaiseTTSError --> CLIMode: Print categorized message and exit code
 
     Success --> [*]: Complete
-    Fail --> [*]: Exit with Error
+    LibraryMode --> [*]
+    CLIMode --> [*]
 
-    note right of NetworkError
-        Implements exponential
-        backoff for transient
-        network issues
+    note right of RetryConfigured
+        RetryPolicy is opt-in through
+        CLI/config or provider construction.
     end note
 
-    note right of VoiceError
-        Fuzzy matching suggests
-        similar voice names
+    note right of UserError
+        Providers include available or
+        matching voices where supported.
     end note
 ```
 
@@ -1513,62 +1602,72 @@ stateDiagram-v2
 graph TB
     subgraph "Caching Strategies"
         VC[Voice Cache<br/>7-day TTL]
-        LC[Library Cache<br/>elevenlabs module]
-        FC[File Cache<br/>Recent audio files]
+        VSC[Voice Sample Cache<br/>ElevenLabs previews]
+        MC[Model File Cache<br/>Kokoro ONNX]
     end
 
     subgraph "Memory Optimization"
         STREAM["Iterator[bytes] Streaming"]
         DIRECT[Direct File Writing]
-        CHUNK[Chunk Processing]
+        CHUNK[Sentence-aware Chunking]
     end
 
-    subgraph "API Optimization"
-        BATCH[Batch Requests]
+    subgraph "Provider Operation Optimization"
+        WORKFLOW[Batch and Watch Automation]
         APISTREAM[Streaming Responses]
-        TIMEOUT[Request Timeouts<br/>10 seconds]
-        RETRY[Smart Retry Logic]
+        TIMEOUT[Request Timeouts]
+        RETRY[Configurable Retry/Backoff]
     end
 
     subgraph "Resource Management"
         MEM[Memory Management<br/>Stream large files]
         TEMP[Temp File Cleanup]
+        POST[Optional ffmpeg Post-processing]
         POOL[Connection Pooling]
     end
 
-    subgraph "Parallel Processing"
-        ASYNC[Async Operations<br/>Future Enhancement]
-        MULTI[Multi-provider<br/>Parallel Requests]
+    subgraph "Library and Benchmark Support"
+        ASYNC[Async Library API]
+        MULTI[Multi-provider Benchmarking]
     end
 
     VC --> PERF[Performance<br/>Improvements]
-    LC --> PERF
-    FC --> PERF
+    VSC --> PERF
+    MC --> PERF
 
-    BATCH --> PERF
+    STREAM --> PERF
+    DIRECT --> PERF
+    CHUNK --> PERF
+
+    WORKFLOW --> PERF
     APISTREAM --> PERF
     TIMEOUT --> PERF
     RETRY --> PERF
 
     MEM --> PERF
     TEMP --> PERF
+    POST --> PERF
     POOL --> PERF
 
-    ASYNC -.-> PERF
-    MULTI -.-> PERF
+    ASYNC --> PERF
+    MULTI --> PERF
 
     style VC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style LC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style FC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style BATCH fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style VSC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style MC fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style WORKFLOW fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style STREAM fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style DIRECT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style CHUNK fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style APISTREAM fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style TIMEOUT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style RETRY fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style MEM fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style TEMP fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style POST fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style POOL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ASYNC fill:#ff6f00,stroke:#ffa726,stroke-width:2px,stroke-dasharray: 5 5,color:#ffffff
-    style MULTI fill:#ff6f00,stroke:#ffa726,stroke-width:2px,stroke-dasharray: 5 5,color:#ffffff
+    style ASYNC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style MULTI fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style PERF fill:#2e7d32,stroke:#66bb6a,stroke-width:3px,color:#ffffff
 ```
 
@@ -1630,8 +1729,8 @@ graph TB
 
         subgraph "Data Protection"
             CACHE_SEC[Cache Security<br/>HMAC-SHA256 Integrity]
-            TEMP_SEC[Temp File Security<br/>Secure Deletion]
-            AUDIO_SEC[Audio Privacy<br/>No Cloud Storage]
+            TEMP_SEC[Temp File Handling<br/>Automatic Cleanup]
+            AUDIO_SEC[Audio File Handling<br/>Local Save/Playback]
             CHECKSUM[SHA256 Verification<br/>Model Integrity]
             CONF_SEC[Config File Permissions<br/>0600 Owner-Only]
         end
@@ -1650,10 +1749,10 @@ graph TB
     end
 
     KEYS --> VALID
-    CACHE_SEC --> PERMS[File Permissions<br/>0600]
-    CONF_SEC --> PERMS
+    CACHE_SEC --> INTEGRITY[HMAC Verification]
+    CONF_SEC --> PERMS[Owner-only Permissions]
     TEXT_VAL --> ESCAPE[Special Character Handling]
-    HTTPS --> TLS[TLS 1.2+]
+    HTTPS --> TLS[TLS]
 
     style KEYS fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style VALID fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -1669,6 +1768,7 @@ graph TB
     style HTTPS fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style TIMEOUT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style CERT fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style INTEGRITY fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style PERMS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style ESCAPE fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style TLS fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
@@ -1676,32 +1776,37 @@ graph TB
 
 ## Future Enhancements
 
-### Roadmap
+### Potential Roadmap Areas
+
+Current implementation already includes async library helpers, batch/watch automation, retry/backoff controls, and lightweight language hints. Remaining roadmap areas focus on broader integrations and deeper runtime services.
 
 ```mermaid
-gantt
-    title PAR CLI TTS Enhancement Roadmap
-    dateFormat YYYY-MM-DD
+flowchart TD
+    Roadmap[Future Architecture Areas]
+    Providers[Additional Cloud Providers<br/>Amazon Polly, Azure Speech, Google Cloud TTS]
+    Voice[Voice Profile Management<br/>User presets and preferences]
+    SSML[Full SSML Support<br/>Beyond lightweight markup]
+    Streaming[Real-time Streaming<br/>Lower-latency playback]
+    Cache[Advanced Caching<br/>Multi-tier and shared cache backends]
+    Metrics[Persistent Metrics<br/>Usage, cost, and latency history]
+    API[Web API Wrapper<br/>Service deployment mode]
 
-    section Core Features
-    Async Operations           :2026-06-01, 30d
-    Batch Processing           :2026-07-01, 20d
-    Progress Indicators        :2026-07-15, 15d
+    Roadmap --> Providers
+    Roadmap --> Voice
+    Roadmap --> SSML
+    Roadmap --> Streaming
+    Roadmap --> Cache
+    Roadmap --> Metrics
+    Roadmap --> API
 
-    section Provider Support
-    Amazon Polly              :2026-08-01, 25d
-    Azure Speech Services     :2026-09-01, 25d
-    Google Cloud TTS          :2026-10-01, 25d
-
-    section Advanced Features
-    Voice Cloning Support     :2026-11-01, 30d
-    SSML Support             :2026-12-01, 20d
-    Real-time Streaming      :2027-01-01, 30d
-
-    section Performance
-    Parallel Generation      :2026-08-15, 20d
-    Advanced Caching        :2026-09-15, 15d
-    CDN Integration         :2026-10-15, 20d
+    style Roadmap fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style Providers fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style Voice fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style SSML fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style Streaming fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style Cache fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style Metrics fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style API fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
 ```
 
 ### Recent Improvements
@@ -1718,55 +1823,36 @@ gantt
 8. **Entry Point Discovery**: External packages can expose providers through the `par_tts.providers` entry point group
 9. **Provider Capability Matrix**: `--capabilities` renders static provider capabilities without initializing providers or requiring API keys
 10. **Voice Benchmark Mode**: `--benchmark` compares objective latency, output size, and estimated cost across selected providers
+11. **Workflow Automation**: Clipboard input, watched stdin, batch files, docs-to-audio watch mode, templates, notification defaults, and timestamp exports share `par_tts.workflow` helpers
+12. **Text and Audio Processing**: Chunking, lightweight markup, pronunciations, language hints, and ffmpeg-backed post-processing are reusable from CLI and library paths
+13. **Reliability and Observability**: Structured logging, offline doctor diagnostics, generation summaries, and retry/backoff controls are available without changing provider implementations
 
-#### v0.5.0
+#### Current Capability Baseline
 
-1. **Library API Surface**: `par_tts` is now a proper importable Python library with `get_provider()`, `list_providers()`, and typed options
-2. **Import Package Renamed**: Canonical import is now `par_tts` (old `par_cli_tts` still works with deprecation warning)
-3. **Decoupled from Rich**: Library modules use stdlib logging instead of Rich console
-4. **Deepgram TTS Provider**: REST `/v1/speak` integration with full Aura/Aura-2 voice catalog
-5. **Google Gemini TTS Provider**: `generateContent` audio modality with 30 prebuilt voices
-6. **Per-Provider Voice Configuration**: New `voices:` mapping prevents voice bleed across providers
-7. **Audio Playback Extracted**: Dedicated `par_tts.audio` module for library use
+Architecture-relevant capabilities now include:
+1. **Library API Surface**: `par_tts` is an importable Python library with provider lookup, typed provider options, reusable pipelines, and public helper APIs
+2. **Canonical Import Path**: `par_tts` is the canonical package, while legacy imports remain compatibility-focused
+3. **Rich-Decoupled Library Modules**: Library modules use stdlib logging instead of Rich console dependencies
+4. **Cloud and Offline Providers**: ElevenLabs, OpenAI, Deepgram, Gemini, and Kokoro ONNX share provider abstractions and registry metadata
+5. **Per-Provider Voice Configuration**: The `voices:` mapping prevents voice bleed across providers
+6. **Cross-Platform Audio Playback**: Dedicated audio playback supports macOS, Linux, and Windows paths where system players are available
+7. **Configuration and API-Key Support**: YAML config files can store defaults, profiles, per-provider voices, and provider API keys with owner-only config-file permissions
+8. **Voice Cache and Model Integrity**: ElevenLabs voice metadata uses cache hashing and HMAC integrity checks; Kokoro downloads use SHA256 model verification
+9. **Input and Workflow Flexibility**: Direct text, stdin, file input, clipboard, batch files, watched stdin, and watched document folders are all supported
+10. **Streaming and Memory Efficiency**: Providers can return iterators, and audio streams directly to files without full buffering when supported
 
-#### v0.4.2
-
-1. **Config File Provider Setting**: Provider from config file now correctly overrides default
-2. **API Keys in Config File**: API keys can now be stored in config file
-3. **ElevenLabs Audio Playback**: Fixed volume control and iterator consumption
-
-#### v0.4.0
-
-1. **Full Windows Support**: Complete Windows compatibility with volume control
-2. **OpenAI gpt-4o-mini-tts**: New default model with voice instructions support
-3. **Extended Voice Selection**: OpenAI now supports 13 voices including ballad, verse, marin, cedar
-4. **Voice Instructions**: OpenAI gpt-4o-mini-tts supports style instructions (e.g., "Speak in a cheerful tone")
-5. **Kokoro Default Provider**: kokoro-onnx is now the default provider for offline-first usage
-
-#### v0.2.0
-
-1. **Configuration File Support**: YAML-based config at ~/.config/par-tts/config.yaml
-2. **Consistent Error Handling**: ErrorType enum with categorized exit codes
-3. **Smarter Voice Cache**: Change detection, manual refresh, sample caching
-4. **Input Methods**: Support for stdin piping and file input (@filename)
-5. **Volume Control**: Platform-specific volume adjustment (0.0-5.0)
-6. **Voice Preview**: Test voices with sample text before use
-7. **Memory Efficiency**: Stream audio directly to files without buffering
-8. **Security**: API key sanitization in debug output
-9. **Model Verification**: SHA256 checksums for downloaded models
-10. **CLI Enhancement**: All options now have short flags
+> **📝 Note:** Release-specific history belongs in [CHANGELOG.md](../CHANGELOG.md); this section summarizes current architecture capabilities without storing package version milestones.
 
 ### Planned Architecture Improvements
 
 1. **Cost Tracking**: Persist and aggregate API usage costs beyond per-run static estimates
-2. **Better Progress Feedback**: Show progress for long text processing
-3. **Voice Profile Management**: User-specific voice preferences and presets
-4. **Advanced Caching**: Multi-tier caching with Redis support
+2. **Better Progress Feedback**: Show progress for long text processing and multi-segment synthesis
+3. **Voice Profile Management**: User-specific voice preferences and reusable presets beyond config profiles
+4. **Advanced Caching**: Multi-tier caching with optional shared cache backends
 5. **Monitoring and Metrics**: Performance tracking and usage analytics beyond local benchmark output
-6. **Web API**: RESTful API wrapper for the CLI functionality
+6. **Web API**: RESTful API wrapper for CLI and library functionality
 7. **Voice Marketplace**: Integration with voice model marketplaces
-8. **Multi-language Support**: Automatic language detection and switching
-9. **Retry Logic**: Exponential backoff for network failures
+8. **Advanced Multi-language Support**: Provider-aware language detection, validation, and switching beyond current script hints
 
 ## Conclusion
 

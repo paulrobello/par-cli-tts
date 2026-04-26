@@ -17,7 +17,7 @@ Usage:
     provider.save_audio(audio, "output.wav")
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 from par_tts.audio_processing import AudioProcessingOptions
 from par_tts.costs import COST_PER_MILLION_CHARS, CostEstimate, estimate_synthesis_cost

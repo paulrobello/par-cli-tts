@@ -2,11 +2,11 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 ![Runs on Linux | MacOS | Windows](https://img.shields.io/badge/runs%20on-Linux%20%7C%20MacOS%20%7C%20Windows-blue)
-![Arch x86-63 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
+![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Version](https://img.shields.io/pypi/v/par-cli-tts.svg)
-![Development Status](https://img.shields.io/badge/status-stable-green.svg)
+![Development Status](https://img.shields.io/badge/status-beta-yellow.svg)
 
 A text-to-speech library and command-line tool supporting multiple TTS providers (ElevenLabs, OpenAI, Kokoro ONNX, Deepgram, and Google Gemini) with intelligent voice caching, name resolution, and flexible output options.
 
@@ -36,6 +36,7 @@ A text-to-speech library and command-line tool supporting multiple TTS providers
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [Related Documentation](#related-documentation)
 - [License](#license)
 - [Author](#author)
 - [Acknowledgments](#acknowledgments)
@@ -43,16 +44,16 @@ A text-to-speech library and command-line tool supporting multiple TTS providers
 
 ## What's New
 
-### v0.5.0 (Latest)
-- **Library API surface** -- `import par_tts` is now a proper Python library with
-  `get_provider()`, `list_providers()`, and typed per-provider options.
-  See [Library Usage](#library-usage) for examples.
-- **Import package renamed** -- canonical import is now `par_tts` (was `par_cli_tts`).
-  Old imports still work with a deprecation warning.
-- **Decoupled from Rich** -- library modules use `stdlib logging` instead of Rich
-  console, enabling headless/embedded use without Rich installed.
-- **Audio playback extracted** -- `play_audio_bytes` and `play_audio_with_player`
-  moved to dedicated `par_tts.audio` module.
+### v0.5.1 (Latest)
+- **Async library API** -- providers now expose async generation/listing wrappers,
+  speech callbacks, and reusable `SpeechPipeline` objects.
+- **Expanded public API** -- top-level exports include provider factories,
+  typed option schemas, diagnostics, cost estimates, voice search, voice packs,
+  retry controls, and Kokoro model management helpers.
+- **Provider and workflow polish** -- documentation now reflects provider plugins,
+  current CLI workflows, text processing, audio post-processing, and diagnostics.
+- **Security and quality fixes** -- HTTP, file, cache, environment, and Windows
+  playback handling were tightened based on architecture/security review findings.
 
 For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 
@@ -73,7 +74,7 @@ For the full version history, see [CHANGELOG.md](CHANGELOG.md).
 - **Memory Efficient** - Stream audio directly to files without memory buffering
 - **Security First** - API keys sanitized in debug output, SHA256 verification for downloads
 - **Consistent Error Handling** - Clear error messages with categorized exit codes
-- **Provider-Specific Options** - Stability/similarity for ElevenLabs, speed/format for OpenAI, exposed through validated typed option schemas
+- **Provider-Specific Options** - ElevenLabs voice controls, OpenAI speed/format/instructions, Kokoro speed/language, Deepgram format/sample-rate controls, exposed through validated typed option schemas
 - **Async Library API** - Async generation/listing wrappers for integrating providers into async apps without blocking the event loop
 - **Event Hooks** - Stable `on_chunk`, `on_progress`, `on_complete`, and `on_error` callbacks for library consumers
 - **Reusable Speech Pipelines** - Pre-configured `SpeechPipeline` objects for repeated synthesis in long-running applications
@@ -216,7 +217,7 @@ For development or to get the latest features:
 
 Kokoro ONNX models are automatically downloaded on first use! The models are stored in an XDG-compliant data directory:
 
-- **macOS**: `~/Library/Application Support/par-tts/par-tts-kokoro/`
+- **macOS**: `~/Library/Application Support/par-tts-kokoro/`
 - **Linux**: `~/.local/share/par-tts-kokoro/`
 - **Windows**: `%LOCALAPPDATA%\par-tts\par-tts-kokoro\`
 
@@ -329,7 +330,7 @@ This command will:
 **Important**: Before using this output style, ensure:
 
 1. `par-cli-tts` is installed (see [Installation](#installation))
-2. The `install-claude-style` command has been run (automatically grants permissions)
+2. The `par-tts-install-style` command has been run (automatically grants permissions)
 
 If you prefer manual installation, you can:
 1. Copy `.claude/output-styles/tts-summary.md` to `~/.claude/output-styles/`
@@ -441,7 +442,7 @@ speed: 1.0
 
 # ElevenLabs specific
 stability: 0.5
-similarity_boost: 0.75
+similarity_boost: 0.5
 
 # Text processing
 chunk: false
@@ -1267,48 +1268,34 @@ make clean       # Clean build artifacts
 
 ### Project Structure
 
-```
-par-cli-tts/
-├── par_tts/                     # Library package (pip install par-cli-tts)
-│   ├── __init__.py              # Public API: providers, pipelines, options, helpers
-│   ├── audio.py                 # Audio playback utilities
-│   ├── audio_processing.py      # AudioProcessingOptions and ffmpeg helpers
-│   ├── costs.py                 # Static synthesis cost estimates
-│   ├── defaults.py              # Default values for providers
-│   ├── diagnostics.py           # Offline diagnostic checks
-│   ├── errors.py                # TTSError, ErrorType, handle_error
-│   ├── http_client.py           # HTTP client factory
-│   ├── pipeline.py              # Reusable SpeechPipeline objects
-│   ├── provider_factory.py      # Public create_provider helper
-│   ├── text_processing.py       # TextProcessingOptions and segmentation helpers
-│   ├── utils.py                 # Streaming, checksums, sanitization
-│   ├── voice_cache.py           # ElevenLabs voice caching
-│   ├── voice_packs.py           # Built-in voice-pack metadata
-│   ├── voice_search.py          # Provider-neutral voice search
-│   ├── model_downloader.py      # Kokoro ONNX model management
-│   ├── providers/               # TTS provider implementations
-│   │   ├── __init__.py          # Provider exports and PROVIDERS compatibility mapping
-│   │   ├── base.py              # TTSProvider ABC, async APIs, callbacks, Options, plugin metadata
-│   │   ├── registry.py          # Built-in and entry-point provider plugin discovery
-│   │   ├── elevenlabs.py        # ElevenLabs implementation
-│   │   ├── openai.py            # OpenAI implementation
-│   │   ├── kokoro_onnx.py       # Kokoro ONNX (offline) implementation
-│   │   ├── deepgram.py          # Deepgram implementation
-│   │   └── gemini.py            # Google Gemini implementation
-│   └── cli/                     # CLI-only code (not imported by library users)
-│       ├── __init__.py
-│       ├── tts_cli.py           # Main CLI application
-│       ├── kokoro_cli.py        # Kokoro model management CLI
-│       ├── install_claude_style.py  # Claude Code style installer
-│       ├── config_file.py       # ConfigManager (YAML)
-│       └── console.py           # Rich console instances
-├── par_cli_tts/                 # Compat shim (deprecated, re-exports par_tts)
-├── tests/
-├── pyproject.toml
-├── Makefile
-├── CLAUDE.md
-└── README.md
-```
+| Path | Purpose |
+|------|---------|
+| `par_tts/__init__.py` | Public library API for providers, pipelines, options, callbacks, diagnostics, costs, and helper functions |
+| `par_tts/audio.py` | Cross-platform audio playback utilities |
+| `par_tts/audio_processing.py` | `ffmpeg`-backed normalization, silence trimming, fades, presets, and file concatenation |
+| `par_tts/cli/` | CLI entry points, config-file handling, shell completions, Kokoro management, and Claude Code style installation |
+| `par_tts/costs.py` | Static synthesis cost estimates used by CLI and library helpers |
+| `par_tts/defaults.py` | Provider defaults for voices and models |
+| `par_tts/diagnostics.py` | Offline diagnostic checks for audio backends, model files, cache state, and API-key environment variables |
+| `par_tts/errors.py` | `TTSError`, categorized exit codes, path validation, and user-facing error handling |
+| `par_tts/http_client.py` | Shared HTTP client factory for API providers |
+| `par_tts/logging_config.py` | Human-readable and structured JSON logging configuration |
+| `par_tts/model_downloader.py` | Kokoro ONNX model download, verification, and cleanup |
+| `par_tts/pipeline.py` | Reusable `SpeechPipeline` orchestration for library consumers |
+| `par_tts/provider_factory.py` | Public provider factory that resolves provider plugins and API keys |
+| `par_tts/providers/` | Built-in provider implementations, base abstractions, typed options, callbacks, and plugin registry |
+| `par_tts/retry.py` | Retry/backoff policy for provider generation calls |
+| `par_tts/text_processing.py` | Chunking, lightweight markup, voice sections, pronunciations, and language hints |
+| `par_tts/utils.py` | Streaming, checksum verification, safe debug output, and environment sanitization |
+| `par_tts/voice_cache.py` | ElevenLabs voice metadata and sample caching |
+| `par_tts/voice_packs.py` | Built-in metadata-only voice-pack recommendations |
+| `par_tts/voice_search.py` | Provider-neutral voice search helpers |
+| `par_tts/workflow.py` | Batch synthesis, watched-file processing, templating, and timestamp export helpers |
+| `par_cli_tts/` | Deprecated compatibility shim that re-exports `par_tts` |
+| `tests/` | Pytest suite |
+| `docs/` | Architecture and documentation style guidance |
+| `pyproject.toml` | Package metadata, dependencies, scripts, and build configuration |
+| `Makefile` | Development, verification, package, and maintenance commands |
 
 ## Troubleshooting
 
@@ -1387,6 +1374,14 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 - Ensure all tests pass before submitting PR
 - Update documentation for new features
 - Keep commits atomic and well-described
+
+## Related Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - Provider architecture, CLI flow, data storage, and extension points
+- [Documentation Style Guide](docs/DOCUMENTATION_STYLE_GUIDE.md) - Project documentation standards
+- [Changelog](CHANGELOG.md) - Release history and notable changes
+- [Contributing](CONTRIBUTING.md) - Contribution workflow and development expectations
+- [Security Policy](SECURITY.md) - Supported versions and vulnerability reporting
 
 ## License
 

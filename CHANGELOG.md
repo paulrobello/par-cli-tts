@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-04-26
+
 ### Added
 
 - **Async library API** — providers now expose `generate_speech_async()` and
@@ -23,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TTSError`, `ErrorType`, text/audio processing option types, voice search,
   voice packs, static cost estimation, diagnostics, `RetryPolicy`, and Kokoro
   model management via `ModelDownloader`.
-
-## [0.5.1] - 2025-04-25
+- **DOC-004** Create CONTRIBUTING.md with dev setup, conventions, and PR process
+- **DOC-011** Create SECURITY.md with vulnerability reporting policy
 
 ### Fixed
 
@@ -73,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DOC-001** Update all ARCHITECTURE.md file paths from par_cli_tts to par_tts
 - **DOC-002** Add Deepgram and Gemini providers to all architecture diagrams
 - **DOC-003** Update all CLAUDE.md file paths from par_cli_tts to par_tts
-- **DOC-005** Version CHANGELOG [Unreleased] as [0.5.0]
+- **DOC-005** Version CHANGELOG [Unreleased] as [0.5.1]
 - **DOC-006** Standardize README cache command to make update-cache
 - **DOC-007** Add docstrings to public functions in errors.py
 - **DOC-008** Add docstrings to Deepgram and Gemini provider methods
@@ -83,11 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DOC-013** Replace hardcoded version badge with dynamic PyPI badge
 - **DOC-014** Add CHANGELOG cross-reference in ARCHITECTURE.md
 - **DOC-015** Add Attributes section to Voice dataclass
-
-### Added
-
-- **DOC-004** Create CONTRIBUTING.md with dev setup, conventions, and PR process
-- **DOC-011** Create SECURITY.md with vulnerability reporting policy
+- Refresh README and architecture documentation to match current implementation,
+  provider plugins, diagnostics, workflow automation, and style guidance.
 
 ## [0.5.0] - 2025-04-25
 
