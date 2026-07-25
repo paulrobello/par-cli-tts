@@ -13,6 +13,8 @@ A text-to-speech library and command-line tool supporting multiple TTS providers
 **Use as a CLI** — `par-tts "Hello world"`
 **Use as a library** — `from par_tts import get_provider`
 
+**Companion project:** [par-cli-stt](https://github.com/paulrobello/par-cli-stt) — the speech-to-text counterpart (ElevenLabs Scribe, Deepgram Nova-3).
+
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
 ## Table of Contents
