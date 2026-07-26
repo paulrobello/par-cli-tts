@@ -32,6 +32,13 @@ class ModelDownloader:
             "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
             "filename": "voices-v1.0.bin",
         },
+        "kokoro-v1.0-timestamped.onnx": {
+            "url": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve/main/onnx/model.onnx",
+            "size_mb": 327,
+            # sha256 filled after first verified download (Task 4); leave None to skip checksum.
+            "sha256": None,
+            "filename": "kokoro-v1.0-timestamped.onnx",
+        },
     }
 
     def __init__(self):
@@ -49,6 +56,10 @@ class ModelDownloader:
         model_path = self.data_dir / "kokoro-v1.0.onnx"
         voice_path = self.data_dir / "voices-v1.0.bin"
         return model_path, voice_path
+
+    def get_timestamped_model_path(self) -> Path:
+        """Path to the timestamped Kokoro model (emits pred_dur)."""
+        return self.data_dir / "kokoro-v1.0-timestamped.onnx"
 
     def models_exist(self) -> bool:
         """Check if both model files exist.
