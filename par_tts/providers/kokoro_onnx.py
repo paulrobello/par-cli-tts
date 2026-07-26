@@ -73,6 +73,7 @@ class KokoroONNXProvider(TTSProvider):
 
         # Initialize Kokoro
         self.kokoro = Kokoro(self.model_path, self.voice_path)
+        self._timestamped_sess = None  # lazy ONNX session over the timestamped model; injectable for tests
         self._voices: list[str] | None = None
 
     @property
@@ -168,7 +169,7 @@ class KokoroONNXProvider(TTSProvider):
         return buf.getvalue()
 
     def _timestamped_session(self):
-        sess = getattr(self, "_timestamped_sess", None)
+        sess = self._timestamped_sess
         if sess is not None:
             return sess
         from onnxruntime import InferenceSession

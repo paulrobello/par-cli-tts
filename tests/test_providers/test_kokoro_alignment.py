@@ -12,11 +12,11 @@ class FakeTokenizer:
 
 
 class FakeSession:
-    """Mimics kokoro_onnx's session: run(None, inputs) -> [audio, pred_dur]."""
+    """Mimics kokoro_onnx's timestamped session: run(None, inputs) -> [waveform, durations]."""
     def get_outputs(self):
         class O:
             def __init__(self, n): self.name = n
-        return [O("audio"), O("pred_dur")]
+        return [O("waveform"), O("durations")]
     def run(self, outnames, inputs):
         audio = np.zeros(24000 * 2, dtype=np.float32)  # 2s
         pred_dur = np.array([10, 20, 30], dtype=np.int64)
@@ -41,9 +41,18 @@ def test_alignment_returns_visemes(monkeypatch):
     assert align.visemes[0].start_ms == 0.0
 
 
-def test_real_alignment_skips_without_model():
+def test_real_alignment_runs_or_skips():
+    from par_tts.model_downloader import ModelDownloader
+    if not ModelDownloader().get_timestamped_model_path().exists():
+        pytest.skip("timestamped model absent")
     try:
         prov = KokoroONNXProvider()
-        prov._provider_obj  # touch
     except Exception:
-        pytest.skip("kokoro model unavailable")
+        pytest.skip("kokoro provider/model unavailable")
+    try:
+        align = prov.generate_speech_with_alignment("hello world", voice="af_heart")
+    except FileNotFoundError:
+        pytest.skip("timestamped model missing at runtime")
+    assert len(align.visemes) > 0
+    assert align.visemes[-1].end_ms > 0
+    assert align.sample_rate == 24000
