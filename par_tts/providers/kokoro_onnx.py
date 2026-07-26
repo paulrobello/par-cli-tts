@@ -13,7 +13,7 @@ from par_tts.alignment import ipa_to_visemes, pred_dur_to_timestamps
 from par_tts.defaults import DEFAULT_KOKORO_VOICE
 from par_tts.model_downloader import ModelDownloader
 
-from .base import KokoroAlignment, PhonemeSpan, TTSProvider, Voice
+from .base import KokoroAlignment, PhonemeSpan, TTSProvider, VisemeSpan, Voice
 
 
 class KokoroONNXProvider(TTSProvider):
@@ -188,12 +188,17 @@ class KokoroONNXProvider(TTSProvider):
         speed: float = 1.0,
         lang: str = "en-us",
         output_format: str = "wav",
+        trim: bool = True,
     ) -> KokoroAlignment:
         """Synthesize audio + phoneme/viseme timing in one timestamped-model pass.
 
         frame_ms is derived from the model's own outputs (audio samples vs sum of
         duration units), so timestamps stay correct regardless of duration-unit
-        granularity. The Task 4 spike pinned this at ~25.4 ms/unit (NOT 12.5).
+        granularity (Task 4 spike: ~25.4 ms/unit, NOT 12.5). When ``trim`` is True
+        (default), leading/trailing silence is removed with the same librosa trim
+        ``kokoro.create`` uses internally, and phoneme/viseme timestamps are shifted
+        to match — so the returned audio lines up with what ``generate_speech()``
+        produces, and the first viseme is speech, not hundreds of ms of rest.
         """
         voice_arr = self.kokoro.get_voice_style(self.resolve_voice(voice))
         sess = self._timestamped_session()
@@ -212,6 +217,33 @@ class KokoroONNXProvider(TTSProvider):
         spans = pred_dur_to_timestamps(list(phonemes), pred_dur, frame_ms)
         phoneme_spans = [PhonemeSpan(ipa=p[0], start_ms=p[1], end_ms=p[2]) for p in spans]
         visemes = ipa_to_visemes(phoneme_spans)
+        if trim:
+            from kokoro_onnx.trim import trim as _trim_audio
+
+            trimmed, interval = _trim_audio(audio)
+            lead_samples = int(interval[0])
+            if lead_samples > 0:
+                offset_ms = lead_samples / 24000 * 1000
+                audio = trimmed
+                phoneme_spans = [
+                    PhonemeSpan(
+                        ipa=s.ipa,
+                        start_ms=max(0.0, s.start_ms - offset_ms),
+                        end_ms=s.end_ms - offset_ms,
+                    )
+                    for s in phoneme_spans
+                    if s.end_ms - offset_ms > 0
+                ]
+                visemes = [
+                    VisemeSpan(
+                        id=v.id,
+                        start_ms=max(0.0, v.start_ms - offset_ms),
+                        end_ms=v.end_ms - offset_ms,
+                        intensity=v.intensity,
+                    )
+                    for v in visemes
+                    if v.end_ms - offset_ms > 0
+                ]
         buf = io.BytesIO()
         sf.write(buf, audio, 24000, format=output_format.upper())
         return KokoroAlignment(

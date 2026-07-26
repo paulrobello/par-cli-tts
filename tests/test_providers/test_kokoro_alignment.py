@@ -56,3 +56,9 @@ def test_real_alignment_runs_or_skips():
     assert len(align.visemes) > 0
     assert align.visemes[-1].end_ms > 0
     assert align.sample_rate == 24000
+    # Trim (default) removes Kokoro's leading silence and shifts visemes to match:
+    # no negative starts, and the trimmed audio is shorter than the untrimmed.
+    assert all(v.start_ms >= 0 for v in align.visemes)
+    untrimmed = prov.generate_speech_with_alignment("hello world", voice="af_heart", trim=False)
+    assert len(align.audio) < len(untrimmed.audio)
+    assert untrimmed.visemes[0].start_ms == 0.0
