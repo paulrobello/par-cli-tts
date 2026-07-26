@@ -5,13 +5,15 @@ import os
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
+from par_tts.alignment import ipa_to_visemes, pred_dur_to_timestamps
 from par_tts.defaults import DEFAULT_KOKORO_VOICE
 from par_tts.model_downloader import ModelDownloader
 
-from .base import TTSProvider, Voice
+from .base import KokoroAlignment, PhonemeSpan, TTSProvider, Voice
 
 
 class KokoroONNXProvider(TTSProvider):
@@ -164,3 +166,56 @@ class KokoroONNXProvider(TTSProvider):
         buf = io.BytesIO()
         sf.write(buf, samples, sample_rate, format=output_format.upper())
         return buf.getvalue()
+
+    def _timestamped_session(self):
+        sess = getattr(self, "_timestamped_sess", None)
+        if sess is not None:
+            return sess
+        from onnxruntime import InferenceSession
+
+        path = ModelDownloader().get_timestamped_model_path()
+        if not path.exists():
+            raise FileNotFoundError(f"timestamped model not present: {path}")
+        self._timestamped_sess = InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        return self._timestamped_sess
+
+    def generate_speech_with_alignment(
+        self,
+        text: str,
+        voice: str,
+        *,
+        speed: float = 1.0,
+        lang: str = "en-us",
+        output_format: str = "wav",
+    ) -> KokoroAlignment:
+        """Synthesize audio + phoneme/viseme timing in one timestamped-model pass.
+
+        frame_ms is derived from the model's own outputs (audio samples vs sum of
+        duration units), so timestamps stay correct regardless of duration-unit
+        granularity. The Task 4 spike pinned this at ~25.4 ms/unit (NOT 12.5).
+        """
+        voice_arr = self.kokoro.get_voice_style(self.resolve_voice(voice))
+        sess = self._timestamped_session()
+        phonemes = self.kokoro.tokenizer.phonemize(text, lang)
+        tokens = np.array(self.kokoro.tokenizer.tokenize(phonemes), dtype=np.int64)
+        inputs = {
+            "input_ids": [[0, *tokens, 0]],
+            "style": np.array(voice_arr[len(tokens)], dtype=np.float32),
+            "speed": np.array([speed], dtype=np.float32),  # model rejects int32 (Task 4 spike)
+        }
+        waveform, durations = sess.run(None, inputs)  # outputs named ['waveform','durations']
+        audio = np.asarray(waveform).flatten()  # waveform is 2-D (1, N) — flatten
+        pred_dur = np.asarray(durations).flatten()
+        audio_ms = audio.size / 24000 * 1000
+        frame_ms = audio_ms / float(pred_dur.sum()) if pred_dur.sum() else 25.4
+        spans = pred_dur_to_timestamps(list(phonemes), pred_dur, frame_ms)
+        phoneme_spans = [PhonemeSpan(ipa=p[0], start_ms=p[1], end_ms=p[2]) for p in spans]
+        visemes = ipa_to_visemes(phoneme_spans)
+        buf = io.BytesIO()
+        sf.write(buf, audio, 24000, format=output_format.upper())
+        return KokoroAlignment(
+            audio=buf.getvalue(),
+            sample_rate=24000,
+            phonemes=phoneme_spans,
+            visemes=visemes,
+        )
