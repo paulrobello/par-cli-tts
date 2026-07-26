@@ -604,3 +604,32 @@ async def _run_callback_async(callback: Callable[[Any], CallbackResult], value: 
 async def _emit_error_async(callbacks: SpeechCallbacks | None, exc: Exception) -> None:
     if callbacks and callbacks.on_error:
         await _run_callback_async(callbacks.on_error, exc)
+
+
+@dataclass(frozen=True)
+class PhonemeSpan:
+    """A single phoneme with its timing in audio-clock milliseconds."""
+
+    ipa: str
+    start_ms: float
+    end_ms: float
+
+
+@dataclass(frozen=True)
+class VisemeSpan:
+    """A Rhubarb mouth-shape (A..X) with timing + intensity (0..1)."""
+
+    id: str
+    start_ms: float
+    end_ms: float
+    intensity: float = 1.0
+
+
+@dataclass(frozen=True)
+class KokoroAlignment:
+    """Audio plus its phoneme/viseme timing from the timestamped Kokoro model."""
+
+    audio: bytes
+    sample_rate: int
+    phonemes: list[PhonemeSpan]
+    visemes: list[VisemeSpan]
