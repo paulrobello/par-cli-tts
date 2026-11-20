@@ -59,18 +59,18 @@ class FakeProvider:
         return None
 
 
-def test_cli_applies_template_variables(monkeypatch):
+def test_cli_applies_template_variables(monkeypatch, tmp_path):
     """--var should render variables in @template input before synthesis."""
     runner = CliRunner()
     fake_provider = FakeProvider()
     monkeypatch.setattr(tts_cli, "create_provider", lambda *args, **kwargs: fake_provider)
 
-    with runner.isolated_filesystem():
-        Path("template.txt").write_text("Hello {{ name }} on {date}", encoding="utf-8")
-        result = runner.invoke(
-            tts_cli.app,
-            ["@template.txt", "--provider", "openai", "--var", "name=Paul", "--var", "date=2026-04-26", "--no-play"],
-        )
+    monkeypatch.chdir(tmp_path)
+    Path("template.txt").write_text("Hello {{ name }} on {date}", encoding="utf-8")
+    result = runner.invoke(
+        tts_cli.app,
+        ["@template.txt", "--provider", "openai", "--var", "name=Paul", "--var", "date=2026-04-26", "--no-play"],
+    )
 
     assert result.exit_code == 0
     assert fake_provider.generated[0][0] == "Hello Paul on 2026-04-26"

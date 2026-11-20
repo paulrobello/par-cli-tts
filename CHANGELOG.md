@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-20
+
+- **OpenAI SDK 3 support** — OpenAI speech uses the SDK’s native HTTP transport
+  on SDK 2 and 3, with the existing request timeout and certificate verification.
+- Refreshed compatible stable runtime, development, and build dependencies.
+
 ## [0.5.1] - 2026-04-26
 
 ### Added

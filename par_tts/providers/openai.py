@@ -6,7 +6,6 @@ from typing import Any, Literal
 from openai import OpenAI
 
 from par_tts.defaults import DEFAULT_OPENAI_VOICE
-from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
 from par_tts.retry import run_with_retries
 
@@ -50,9 +49,8 @@ class OpenAIProvider(TTSProvider):
             **kwargs: Additional configuration.
         """
         super().__init__(api_key, **kwargs)
-        # Create httpx client with standard configuration
-        http_client = create_http_client(timeout=kwargs.get("timeout", 10.0))
-        self.client = OpenAI(api_key=api_key, http_client=http_client)
+        # Each SDK major supplies its own TLS-verifying HTTP transport.
+        self.client = OpenAI(api_key=api_key, timeout=kwargs.get("timeout", 10.0))
 
     @property
     def name(self) -> str:
