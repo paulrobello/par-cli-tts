@@ -1190,19 +1190,19 @@ isolated and reported as diagnostics instead of preventing built-ins from loadin
 
 ### Google Gemini
 
-- **Models**: `gemini-2.5-flash-preview-tts` (default), `gemini-2.5-pro-preview-tts`
+- **Models**: `gemini-3.8-flash-lite-tts` (default), `gemini-3.8-flash-tts`
 - **Voices**: 30 prebuilt voices with style descriptors — Zephyr (Bright),
   Puck (Upbeat), Kore (Firm, default), Aoede (Breezy), Fenrir (Excitable),
   Leda (Youthful), Charon (Informative), Algieba (Smooth), and more.
   Run `par-tts -P gemini --list` for the full table.
 - **Features**:
-  - REST `generateContent` integration via httpx (no SDK)
-  - Single-shot response (not chunked); the provider wraps the raw 24 kHz
-    16-bit mono PCM in a 44-byte RIFF/WAVE header so output is a self-contained
-    `.wav` file
+  - Stateless REST `/v1beta/interactions` integration via httpx (no SDK)
+  - Single-shot response (not chunked); Gemini 3.8 returns a self-contained
+    `.wav` file. Explicit legacy model selections still use `generateContent`
+    and its raw PCM-to-WAV path while those models remain available.
   - Voice names are case-insensitive on input (`kore`, `Kore`, and `KORE` all
     resolve to the canonical `Kore`)
-- **Output Formats**: wav (PCM is the only modality the API emits)
+- **Output Formats**: wav
 - **API key**: `gemini_api_key` in config, or one of `GEMINI_API_KEY` /
   `GOOGLE_API_KEY` env vars. Get a free key at
   <https://aistudio.google.com/apikey>. (TTS models are currently in preview;
