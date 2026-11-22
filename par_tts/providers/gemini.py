@@ -1,10 +1,7 @@
 """Google Gemini TTS provider implementation.
 
-Uses the Gemini API's `generateContent` endpoint with `responseModalities: ["AUDIO"]`
-to perform single-speaker text-to-speech. The API returns raw signed 16-bit PCM
-audio at 24 kHz mono, base64-encoded inside the JSON response. This provider
-decodes that, prepends a 44-byte WAV header, and hands the result back as a
-single-shot ``bytes`` payload (the response is not chunked).
+Uses stateless Interactions requests for Gemini 3.8 TTS and generateContent
+for explicitly selected legacy models. Both paths return a complete WAV file.
 """
 
 import base64
@@ -12,15 +9,15 @@ import logging
 import struct
 from typing import Any
 
-from par_tts.defaults import DEFAULT_GEMINI_VOICE
+from par_tts.defaults import DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_VOICE
 from par_tts.http_client import create_http_client
 from par_tts.providers.base import TTSProvider, Voice
 from par_tts.retry import run_with_retries
 
 _logger = logging.getLogger(__name__)
 
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+_INTERACTIONS_MODELS = frozenset({"gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"})
 
 PCM_SAMPLE_RATE = 24000
 PCM_CHANNELS = 1
@@ -92,8 +89,26 @@ def wrap_pcm_as_wav(
     return header + pcm
 
 
+def _interaction_wav(payload: dict[str, Any]) -> bytes:
+    """Extract the last generated audio block, which is already a WAV file."""
+    wav_error = "Gemini Interactions did not return WAV audio"
+    for step in reversed(payload.get("steps") or []):
+        if step.get("type") != "model_output":
+            continue
+        for part in reversed(step.get("content") or []):
+            if part.get("type") == "audio" and part.get("data"):
+                try:
+                    audio = base64.b64decode(part["data"], validate=True)
+                except (ValueError, TypeError) as exc:
+                    raise RuntimeError(wav_error) from exc
+                if not (audio.startswith(b"RIFF") and audio[8:12] == b"WAVE"):
+                    raise RuntimeError(wav_error)
+                return audio
+    raise RuntimeError(wav_error)
+
+
 class GeminiProvider(TTSProvider):
-    """Google Gemini TTS provider (preview)."""
+    """Google Gemini TTS provider."""
 
     VOICE_NAMES = frozenset(name for name, _ in _GEMINI_VOICES)
     _VOICE_CANONICAL = {name.lower(): name for name, _ in _GEMINI_VOICES}
@@ -114,7 +129,6 @@ class GeminiProvider(TTSProvider):
 
     @property
     def supported_formats(self) -> list[str]:
-        # API only emits raw PCM; we always wrap to WAV for the user.
         return ["wav"]
 
     @property
@@ -145,21 +159,32 @@ class GeminiProvider(TTSProvider):
         active_model = model or self.default_model
         canonical_voice = self._VOICE_CANONICAL.get(voice.lower(), voice)
 
-        url = f"{GEMINI_API_BASE}/{active_model}:generateContent"
+        uses_interactions = active_model in _INTERACTIONS_MODELS
+        if uses_interactions:
+            url = f"{GEMINI_API_BASE}/interactions"
+            body: dict[str, Any] = {
+                "model": active_model,
+                "input": [{"type": "user_input", "content": [{"type": "text", "text": text}]}],
+                "response_format": {"type": "audio"},
+                "generation_config": {"speech_config": [{"voice": canonical_voice}]},
+                "store": False,
+            }
+        else:
+            url = f"{GEMINI_API_BASE}/models/{active_model}:generateContent"
+            body = {
+                "contents": [{"parts": [{"text": text}]}],
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "voiceConfig": {
+                            "prebuiltVoiceConfig": {"voiceName": canonical_voice},
+                        },
+                    },
+                },
+            }
         headers = {
             "x-goog-api-key": self.api_key or "",
             "Content-Type": "application/json",
-        }
-        body: dict[str, Any] = {
-            "contents": [{"parts": [{"text": text}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": canonical_voice},
-                    },
-                },
-            },
         }
 
         resp = run_with_retries(
@@ -175,6 +200,9 @@ class GeminiProvider(TTSProvider):
             raise RuntimeError(f"Gemini API error {resp.status_code}: {error_text}")
 
         payload = resp.json()
+        if uses_interactions:
+            return _interaction_wav(payload)
+
         try:
             inline = payload["candidates"][0]["content"]["parts"][0]["inlineData"]
             pcm_b64 = inline["data"]

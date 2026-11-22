@@ -15,13 +15,14 @@ DEFAULT_OPENAI_VOICE = "nova"
 DEFAULT_KOKORO_VOICE = "af_sarah"
 DEFAULT_DEEPGRAM_VOICE = "aura-2-thalia-en"
 DEFAULT_GEMINI_VOICE = "Kore"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash-lite-tts"
 
 DEFAULT_MODELS: dict[str, str] = {
     "elevenlabs": "eleven_multilingual_v2",
     "openai": "gpt-4o-mini-tts",
     "kokoro-onnx": "kokoro-v1.0",
     "deepgram": DEFAULT_DEEPGRAM_VOICE,
-    "gemini": "gemini-2.5-flash-preview-tts",
+    "gemini": DEFAULT_GEMINI_MODEL,
 }
 
 

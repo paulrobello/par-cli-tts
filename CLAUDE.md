@@ -82,7 +82,7 @@ The codebase uses an abstract base class pattern for TTS providers to enable mul
    - `par_tts/providers/openai.py`: OpenAI TTS implementation
    - `par_tts/providers/kokoro_onnx.py`: Kokoro ONNX offline TTS with automatic model downloading
    - `par_tts/providers/deepgram.py`: Deepgram TTS (Aura / Aura-2) via REST `/v1/speak` (no SDK; httpx streaming)
-   - `par_tts/providers/gemini.py`: Google Gemini TTS via REST `generateContent` audio modality (no SDK; raw 24 kHz PCM wrapped to WAV)
+   - `par_tts/providers/gemini.py`: Google Gemini 3.8 TTS via stateless REST Interactions (no SDK; legacy `generateContent` PCM still wrapped to WAV)
    - Providers are registered in `par_tts/providers/__init__.py` via the `PROVIDERS` dict
 
 3. **Adding New Providers**:

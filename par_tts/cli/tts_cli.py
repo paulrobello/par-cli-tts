@@ -27,7 +27,7 @@ from par_tts.audio_processing import AudioProcessingOptions, concat_audio_files,
 from par_tts.cli.completions import completion_install_instructions, generate_completion_script
 from par_tts.cli.config_file import ConfigManager
 from par_tts.cli.console import console
-from par_tts.defaults import DEFAULT_PROVIDER, get_default_voice
+from par_tts.defaults import DEFAULT_GEMINI_MODEL, DEFAULT_PROVIDER, get_default_voice
 from par_tts.errors import ErrorType, TTSError, handle_error, set_debug_mode, validate_api_key, validate_file_path
 from par_tts.logging_config import configure_logging
 from par_tts.providers import PROVIDERS, TTSProvider, get_plugin_diagnostics, get_provider_plugin, get_provider_plugins
@@ -55,7 +55,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "openai": "gpt-4o-mini-tts",
     "kokoro-onnx": "kokoro-v1.0",
     "deepgram": "aura-2-thalia-en",
-    "gemini": "gemini-2.5-flash-preview-tts",
+    "gemini": DEFAULT_GEMINI_MODEL,
 }
 
 # Approximate per-million-character rates for quick estimates. Cloud provider

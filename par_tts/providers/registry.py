@@ -9,6 +9,7 @@ from typing import Any
 from par_tts.defaults import (
     DEFAULT_DEEPGRAM_VOICE,
     DEFAULT_ELEVENLABS_VOICE,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_GEMINI_VOICE,
     DEFAULT_KOKORO_VOICE,
     DEFAULT_OPENAI_VOICE,
@@ -83,7 +84,7 @@ _builtin_plugins: tuple[ProviderPlugin, ...] = (
         provider_class=GeminiProvider,
         description="Gemini",
         capabilities=ProviderCapabilities(formats=["wav"]),
-        default_model="gemini-2.5-flash-preview-tts",
+        default_model=DEFAULT_GEMINI_MODEL,
         default_voice=DEFAULT_GEMINI_VOICE,
         api_key_env_vars=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
         cost_per_million_chars=0.50,

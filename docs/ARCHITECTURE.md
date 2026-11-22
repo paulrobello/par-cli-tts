@@ -322,11 +322,11 @@ Central discovery and metadata boundary for providers:
 - Supported formats: mp3, wav, flac, opus, aac
 
 **Gemini Provider (`par_tts/providers/gemini.py`)**
-- REST `generateContent` with `responseModalities: ["AUDIO"]` via httpx (no SDK dependency)
+- Stateless REST `/v1beta/interactions` via httpx for Gemini 3.8 TTS (no SDK dependency)
 - 30 prebuilt voices with style descriptors (Zephyr, Puck, Kore, Aoede, etc.)
-- Raw 24 kHz 16-bit mono PCM wrapped in WAV header
+- Gemini 3.8 returns WAV directly; explicitly selected legacy models still use `generateContent` and wrap raw PCM
 - Case-insensitive voice name resolution with partial matching
-- Default model: gemini-2.5-flash-preview-tts
+- Default model: gemini-3.8-flash-lite-tts
 - Default voice: Kore
 - Supported formats: wav
 

@@ -40,5 +40,5 @@ storytelling:
       notes: Expressive storytelling-style delivery.
     - provider: gemini
       voice: Kore
-      model: gemini-2.5-flash-preview-tts
+      model: gemini-3.8-flash-lite-tts
       notes: Flexible Gemini voice for creative readings.
